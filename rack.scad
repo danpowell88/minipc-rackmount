@@ -2,7 +2,6 @@
 // Front ears, square rack holes (M6 cage nuts)
 // Mini PC sled cutouts for vertical mounting
 // Two halves join with M3 screws via bottom joiner plate
-// OpenSCAD: F6 → Export STL
 
 $fn = 64;
 
@@ -10,12 +9,13 @@ $fn = 64;
 // Print Selection
 // --------------------
 // Set which part to render:
-// "left" = left half of rack
-// "right" = right half of rack  
-// "joiner" = bottom joiner plate (joins both halves)
-// "both" = show assembled view
-print_part = "both";
-half_spacing = 0;    // gap between halves when showing both (0 for assembled)
+// Available options: "left", "right", "joiner", "both"
+//   "left"   = left half of rack (for printing)
+//   "right"  = right half of rack (for printing)
+//   "joiner" = bottom joiner plate that joins both halves (for printing)
+//   "both"   = show assembled view (for preview, not for printing)
+print_part = "both";  // OPTIONS: "left", "right", "joiner", "both"
+half_spacing = 0;     // gap between halves when showing both (0 for assembled view)
 
 // --------------------
 // Dimensions (mm)
@@ -201,23 +201,28 @@ module rack_half(side) {
             cube([ear_width, ear_thk, rack_height]);
         }
         
-        // Join tabs on inside of front panel (top and bottom)
-        // These have screw holes facing inward, not through front face
-        // Top join tab
-        translate([side > 0 ? 0 : -join_flange_thk, front_panel_thk, rack_height - rib_width - join_flange_thk])
-          cube([join_flange_thk, rib_height + 10, join_flange_thk]);
-        // Bottom join tab  
-        translate([side > 0 ? 0 : -join_flange_thk, front_panel_thk, rib_width])
-          cube([join_flange_thk, rib_height + 10, join_flange_thk]);
-        
         // Dovetail joints on front panel edge (right half has male dovetails)
+        // Positioned to be flush with front face
         if (side > 0) {
           for (i = [0:num_dovetails-1]) {
             z_pos = (rack_height / (num_dovetails + 1)) * (i + 1);
-            translate([0, front_panel_thk/2, z_pos - dovetail_height/2])
+            translate([0, dovetail_depth, z_pos - dovetail_height/2])
               dovetail_male(dovetail_height);
           }
         }
+        
+        // Inner faceplate screw tabs - overlapping tabs on back of front panel
+        // Right half has tabs that extend left (negative X)
+        // Left half has tabs that extend right (positive X)
+        // Top screw tab
+        translate([side > 0 ? -join_flange_thk : 0, front_panel_thk, rack_height - rib_width - join_flange_thk])
+          cube([join_flange_thk, rib_height, join_flange_thk]);
+        // Middle screw tab
+        translate([side > 0 ? -join_flange_thk : 0, front_panel_thk, rack_height/2 - join_flange_thk/2])
+          cube([join_flange_thk, rib_height, join_flange_thk]);
+        // Bottom screw tab
+        translate([side > 0 ? -join_flange_thk : 0, front_panel_thk, rib_width])
+          cube([join_flange_thk, rib_height, join_flange_thk]);
       }
 
       // Square rack holes (only on this side's ear)
@@ -277,7 +282,7 @@ module rack_half(side) {
       if (side < 0) {
         for (i = [0:num_dovetails-1]) {
           z_pos = (rack_height / (num_dovetails + 1)) * (i + 1);
-          translate([0, front_panel_thk/2, z_pos - dovetail_height/2 - dovetail_clearance])
+          translate([0, dovetail_depth, z_pos - dovetail_height/2 - dovetail_clearance])
             dovetail_female(dovetail_height + 2*dovetail_clearance);
         }
       }
@@ -285,35 +290,34 @@ module rack_half(side) {
       // Optional screw holes through dovetail joints (both halves)
       for (i = [0:num_dovetails-1]) {
         z_pos = (rack_height / (num_dovetails + 1)) * (i + 1);
-        // Horizontal screw hole through the dovetail joint
-        translate([side > 0 ? -dovetail_depth - 1 : dovetail_depth + 1, front_panel_thk/2, z_pos])
+        // Horizontal screw hole through the dovetail joint from back
+        translate([side > 0 ? -dovetail_depth - 1 : dovetail_depth + 1, dovetail_depth + 2, z_pos])
           rotate([0, 90, 0])
-            cylinder(h=dovetail_depth + front_panel_thk, d=screw_hole_dia);
+            cylinder(h=dovetail_depth + 4, d=screw_hole_dia);
       }
       
-      // Join screw holes in tabs (horizontal, facing center)
+      // Inner faceplate screw holes - vertical holes through overlapping tabs
+      // These go through both tabs when halves are assembled
       // Top tab screw hole
-      translate([side > 0 ? -1 : 1, front_panel_thk + rib_height/2, rack_height - rib_width - join_flange_thk/2])
-        rotate([0, 90, 0])
-          cylinder(h=join_flange_thk+2, d=screw_hole_dia);
+      translate([side > 0 ? -join_flange_thk/2 : join_flange_thk/2, front_panel_thk + rib_height/2, rack_height - rib_width - join_flange_thk/2])
+        cylinder(h=join_flange_thk + 2, d=screw_hole_dia, center=true);
+      // Middle tab screw hole
+      translate([side > 0 ? -join_flange_thk/2 : join_flange_thk/2, front_panel_thk + rib_height/2, rack_height/2])
+        cylinder(h=join_flange_thk + 2, d=screw_hole_dia, center=true);
       // Bottom tab screw hole
-      translate([side > 0 ? -1 : 1, front_panel_thk + rib_height/2, rib_width + join_flange_thk/2])
-        rotate([0, 90, 0])
-          cylinder(h=join_flange_thk+2, d=screw_hole_dia);
+      translate([side > 0 ? -join_flange_thk/2 : join_flange_thk/2, front_panel_thk + rib_height/2, rib_width + join_flange_thk/2])
+        cylinder(h=join_flange_thk + 2, d=screw_hole_dia, center=true);
       
-      // Joiner plate screw holes in bottom panel
-      // Front screw hole
-      translate([side > 0 ? joiner_width/4 : -joiner_width/4, joiner_screw_inset, -1])
-        cylinder(h=panel_thk+2, d=screw_hole_dia);
-      // Middle screw hole
-      translate([side > 0 ? joiner_width/4 : -joiner_width/4, joiner_length/2, -1])
-        cylinder(h=panel_thk+2, d=screw_hole_dia);
-      // Back screw hole
-      translate([side > 0 ? joiner_width/4 : -joiner_width/4, joiner_length - joiner_screw_inset, -1])
-        cylinder(h=panel_thk+2, d=screw_hole_dia);
-      // Far back screw hole (near brace)
-      translate([side > 0 ? joiner_width/4 : -joiner_width/4, depth - joiner_screw_inset, -1])
-        cylinder(h=panel_thk+2, d=screw_hole_dia);
+      // Joiner plate screw holes in bottom panel - evenly distributed along full depth
+      // Joiner starts after front panel and ribs
+      joiner_start = front_panel_thk + rib_height;
+      joiner_depth = depth - joiner_start;
+      num_joiner_screws = floor((joiner_depth - 2*joiner_screw_inset) / 50) + 1;  // approx every 50mm
+      screw_spacing = (joiner_depth - 2*joiner_screw_inset) / (num_joiner_screws - 1);
+      for (i = [0:num_joiner_screws-1]) {
+        translate([side > 0 ? joiner_width/4 : -joiner_width/4, joiner_start + joiner_screw_inset + i * screw_spacing, -1])
+          cylinder(h=panel_thk+2, d=screw_hole_dia);
+      }
     }
 
     // Diagonal brace
@@ -330,71 +334,33 @@ module rack_half(side) {
 }
 
 // Bottom joiner plate (printed separately, joins both halves along the bottom)
+// Front panel joining is handled by dovetails and screws on the rack halves
+// Joiner starts after front panel ribs - front panel has its own support ribs
 module bottom_joiner() {
+  // Calculate number of screw holes along depth (starting after front panel and ribs)
+  joiner_start = front_panel_thk + rib_height;  // start after front panel and ribs
+  joiner_depth = depth - joiner_start;  // remaining depth
+  num_joiner_screws = floor((joiner_depth - 2*joiner_screw_inset) / 50) + 1;  // approx every 50mm
+  screw_spacing = (joiner_depth - 2*joiner_screw_inset) / (num_joiner_screws - 1);
+  
   difference() {
     union() {
-      // Main joiner plate running front to back
-      translate([-joiner_width/2, 0, 0])
-        cube([joiner_width, joiner_length, joiner_thk]);
-      
-      // Back section extending to full depth
-      translate([-joiner_width/2, joiner_length, 0])
-        cube([joiner_width, depth - joiner_length, joiner_thk]);
-      
-      // Front vertical tabs to connect to front panel tabs
-      // Left tab
-      translate([-join_flange_thk, 0, 0])
-        cube([join_flange_thk, front_panel_thk + rib_height + 10, joiner_thk]);
-      translate([-join_flange_thk, front_panel_thk, joiner_thk])
-        cube([join_flange_thk, rib_height + 10, rib_width + join_flange_thk]);
-      // Right tab  
-      translate([0, 0, 0])
-        cube([join_flange_thk, front_panel_thk + rib_height + 10, joiner_thk]);
-      translate([0, front_panel_thk, joiner_thk])
-        cube([join_flange_thk, rib_height + 10, rib_width + join_flange_thk]);
-      
-      // Top tabs for connecting at top of front panel
-      translate([-join_flange_thk, front_panel_thk, rack_height - rib_width - join_flange_thk])
-        cube([join_flange_thk, rib_height + 10, join_flange_thk]);
-      translate([0, front_panel_thk, rack_height - rib_width - join_flange_thk])
-        cube([join_flange_thk, rib_height + 10, join_flange_thk]);
+      // Main joiner plate running from behind front panel ribs to back
+      translate([-joiner_width/2, joiner_start, 0])
+        cube([joiner_width, joiner_depth, joiner_thk]);
     }
     
-    // Screw holes for left half
-    translate([-joiner_width/4, joiner_screw_inset, -1])
-      cylinder(h=joiner_thk+2, d=screw_hole_dia);
-    translate([-joiner_width/4, joiner_length/2, -1])
-      cylinder(h=joiner_thk+2, d=screw_hole_dia);
-    translate([-joiner_width/4, joiner_length - joiner_screw_inset, -1])
-      cylinder(h=joiner_thk+2, d=screw_hole_dia);
-    translate([-joiner_width/4, depth - joiner_screw_inset, -1])
-      cylinder(h=joiner_thk+2, d=screw_hole_dia);
+    // Screw holes for left half - evenly distributed along full depth
+    for (i = [0:num_joiner_screws-1]) {
+      translate([-joiner_width/4, joiner_start + joiner_screw_inset + i * screw_spacing, -1])
+        cylinder(h=joiner_thk+3, d=screw_hole_dia);
+    }
     
-    // Screw holes for right half
-    translate([joiner_width/4, joiner_screw_inset, -1])
-      cylinder(h=joiner_thk+2, d=screw_hole_dia);
-    translate([joiner_width/4, joiner_length/2, -1])
-      cylinder(h=joiner_thk+2, d=screw_hole_dia);
-    translate([joiner_width/4, joiner_length - joiner_screw_inset, -1])
-      cylinder(h=joiner_thk+2, d=screw_hole_dia);
-    translate([joiner_width/4, depth - joiner_screw_inset, -1])
-      cylinder(h=joiner_thk+2, d=screw_hole_dia);
-    
-    // Screw holes for front panel top tabs (horizontal)
-    translate([-join_flange_thk - 1, front_panel_thk + rib_height/2, rack_height - rib_width - join_flange_thk/2])
-      rotate([0, 90, 0])
-        cylinder(h=join_flange_thk+2, d=screw_hole_dia);
-    translate([1, front_panel_thk + rib_height/2, rack_height - rib_width - join_flange_thk/2])
-      rotate([0, 90, 0])
-        cylinder(h=join_flange_thk+2, d=screw_hole_dia);
-    
-    // Screw holes for front panel bottom tabs (horizontal)
-    translate([-join_flange_thk - 1, front_panel_thk + rib_height/2, rib_width + join_flange_thk/2])
-      rotate([0, 90, 0])
-        cylinder(h=join_flange_thk+2, d=screw_hole_dia);
-    translate([1, front_panel_thk + rib_height/2, rib_width + join_flange_thk/2])
-      rotate([0, 90, 0])
-        cylinder(h=join_flange_thk+2, d=screw_hole_dia);
+    // Screw holes for right half - evenly distributed along full depth
+    for (i = [0:num_joiner_screws-1]) {
+      translate([joiner_width/4, joiner_start + joiner_screw_inset + i * screw_spacing, -1])
+        cylinder(h=joiner_thk+3, d=screw_hole_dia);
+    }
   }
 }
 
@@ -416,8 +382,8 @@ if (print_part == "left") {
   translate([half_spacing/2, 0, 0])
     rack_half(1);
   
-  // Show joiner in position
+  // Show joiner in position (on top of bottom panel)
   color("blue", 0.8)
-    translate([0, 0, -joiner_thk])
+    translate([0, 0, panel_thk])
       bottom_joiner();
 }
