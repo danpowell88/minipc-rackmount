@@ -1,9 +1,21 @@
-// 3U Mini-PC Rackmount – Honeycomb All Sides (except front)
+// 3U Mini-PC Rackmount – Split for 250mm Print Bed
 // Front ears, square rack holes (M6 cage nuts)
 // Mini PC sled cutouts for vertical mounting
+// Two halves join with M3 screws via bottom joiner plate
 // OpenSCAD: F6 → Export STL
 
 $fn = 64;
+
+// --------------------
+// Print Selection
+// --------------------
+// Set which part to render:
+// "left" = left half of rack
+// "right" = right half of rack  
+// "joiner" = bottom joiner plate (joins both halves)
+// "both" = show assembled view
+print_part = "both";
+half_spacing = 0;    // gap between halves when showing both (0 for assembled)
 
 // --------------------
 // Dimensions (mm)
@@ -62,10 +74,41 @@ screw_boss_dia = 8;    // boss around screw holes
 brace_width = 15;
 brace_thk = 4;
 
+// Join flange dimensions
+join_flange_width = 20;
+join_flange_height = 25;
+join_flange_thk = 5;
+join_screw_spacing = 15;  // vertical spacing between screws on flange
+
+// Bottom joiner plate dimensions
+joiner_length = 100;      // how far along depth the joiner extends
+joiner_width = 60;        // total width spanning both halves
+joiner_thk = 4;           // thickness of joiner plate
+joiner_screw_inset = 10;  // distance from edge to screw holes
+
+// Back crossbar dimensions (integrated into joiner)
+crossbar_width = 30;
+crossbar_height = brace_thk;
+crossbar_depth = 20;
+
+// Dovetail joint dimensions for front panel connection
+dovetail_width = 8;       // width at narrow end
+dovetail_depth = 6;       // how deep the dovetail goes into panel
+dovetail_angle = 15;      // angle of dovetail sides (degrees)
+dovetail_height = 20;     // height of each dovetail
+dovetail_spacing = 35;    // spacing between dovetails
+dovetail_clearance = 0.3; // clearance for fit
+num_dovetails = 3;        // number of dovetails along front panel height
+
 // Calculate how many PCs fit
-num_pcs = floor((body_width - 20) / (pc_width + sled_wall));  // leave 10mm margin each side
-sled_total_width = num_pcs * (pc_width + sled_wall) - sled_wall;
-sled_start_x = -sled_total_width / 2;
+num_pcs_total = floor((body_width - 20) / (pc_width + sled_wall));
+num_pcs_per_half = floor(num_pcs_total / 2);
+num_pcs = num_pcs_per_half * 2;  // total sleds
+
+// Calculate centered sled positions
+// Center the sleds within each half, leaving gap at center for joiner
+sled_offset = 15;  // offset from center to leave room for joining
+half_width = body_width / 2;
 
 // --------------------
 // Modules
@@ -83,118 +126,298 @@ module vent_grid(w, h){
         square(vent_hole_size, center=true);
 }
 
-// --------------------
-// Model
-// --------------------
-union() {
+// Dovetail profile (2D) - trapezoidal shape
+module dovetail_profile(width, depth, angle, clearance=0) {
+  // Width at base (wider), width at top (narrower due to angle)
+  top_width = width;
+  bottom_width = width + 2 * depth * tan(angle);
+  
+  polygon([
+    [-(bottom_width/2 + clearance), 0],
+    [-(top_width/2 + clearance), depth + clearance],
+    [(top_width/2 + clearance), depth + clearance],
+    [(bottom_width/2 + clearance), 0]
+  ]);
+}
 
-difference(){
+// Male dovetail (protrusion) - for right half
+module dovetail_male(height) {
+  rotate([90, 0, 0])
+    rotate([0, 90, 0])
+      linear_extrude(height)
+        dovetail_profile(dovetail_width, dovetail_depth, dovetail_angle);
+}
 
-  // Main structure
-  union(){
-    // Bottom panel
-    translate([-body_width/2, 0, 0])
-      cube([body_width, depth, panel_thk]);
+// Female dovetail (cutout) - for left half
+module dovetail_female(height) {
+  rotate([90, 0, 0])
+    rotate([0, 90, 0])
+      linear_extrude(height + 0.1)
+        dovetail_profile(dovetail_width, dovetail_depth, dovetail_angle, dovetail_clearance);
+}
 
-    // Front panel (thicker for strength)
-    translate([-body_width/2, 0, 0])
-      cube([body_width, front_panel_thk, rack_height]);
+// Module for one half of the rack
+// side = 1 for right half, -1 for left half
+module rack_half(side) {
+  sled_z_start = (rack_height - pc_height) / 2;
+  
+  // Calculate sled start position - centered with offset from middle
+  sled_area_width = num_pcs_per_half * (pc_width + sled_wall) - sled_wall;
+  sled_start = side > 0 ? sled_offset : -(sled_offset + sled_area_width);
+  
+  union() {
+    difference(){
+      // Main structure
+      union(){
+        // Bottom panel (half)
+        translate([side > 0 ? 0 : -half_width, 0, 0])
+          cube([half_width, depth, panel_thk]);
 
-    // Horizontal reinforcement ribs on back of front panel
-    // Top rib
-    translate([-body_width/2, front_panel_thk, rack_height - rib_width])
-      cube([body_width, rib_height, rib_width]);
-    // Bottom rib
-    translate([-body_width/2, front_panel_thk, 0])
-      cube([body_width, rib_height, rib_width]);
-    // Vertical ribs between sled slots
-    for (i = [0:num_pcs]) {
-      translate([sled_start_x + i * (pc_width + sled_wall) - sled_wall/2 - rib_width/2, front_panel_thk, 0])
-        cube([rib_width, rib_height, rack_height]);
+        // Front panel (half, thicker for strength)
+        translate([side > 0 ? 0 : -half_width, 0, 0])
+          cube([half_width, front_panel_thk, rack_height]);
+
+        // Horizontal reinforcement ribs on back of front panel
+        // Top rib (half)
+        translate([side > 0 ? 0 : -half_width, front_panel_thk, rack_height - rib_width])
+          cube([half_width, rib_height, rib_width]);
+        // Bottom rib (half)
+        translate([side > 0 ? 0 : -half_width, front_panel_thk, 0])
+          cube([half_width, rib_height, rib_width]);
+        
+        // Vertical ribs for sled slots on this half
+        for (i = [0:num_pcs_per_half]) {
+          rib_x = sled_start + i * (pc_width + sled_wall) - sled_wall/2;
+          translate([rib_x - rib_width/2, front_panel_thk, 0])
+            cube([rib_width, rib_height, rack_height]);
+        }
+
+        // Front ear
+        if (side > 0) {
+          translate([rack_width/2 - ear_width, 0, 0])
+            cube([ear_width, ear_thk, rack_height]);
+        } else {
+          translate([-rack_width/2, 0, 0])
+            cube([ear_width, ear_thk, rack_height]);
+        }
+        
+        // Join tabs on inside of front panel (top and bottom)
+        // These have screw holes facing inward, not through front face
+        // Top join tab
+        translate([side > 0 ? 0 : -join_flange_thk, front_panel_thk, rack_height - rib_width - join_flange_thk])
+          cube([join_flange_thk, rib_height + 10, join_flange_thk]);
+        // Bottom join tab  
+        translate([side > 0 ? 0 : -join_flange_thk, front_panel_thk, rib_width])
+          cube([join_flange_thk, rib_height + 10, join_flange_thk]);
+        
+        // Dovetail joints on front panel edge (right half has male dovetails)
+        if (side > 0) {
+          for (i = [0:num_dovetails-1]) {
+            z_pos = (rack_height / (num_dovetails + 1)) * (i + 1);
+            translate([0, front_panel_thk/2, z_pos - dovetail_height/2])
+              dovetail_male(dovetail_height);
+          }
+        }
+      }
+
+      // Square rack holes (only on this side's ear)
+      for (z = hole_z){
+        if (side > 0) {
+          translate([rack_width/2 - hole_edge_offset, ear_thk/2, z])
+            cube([hole_size, ear_thk+1, hole_size], center=true);
+        } else {
+          translate([-rack_width/2 + hole_edge_offset, ear_thk/2, z])
+            cube([hole_size, ear_thk+1, hole_size], center=true);
+        }
+      }
+
+      // Vent holes in bottom panel (half) - avoid joiner area
+      translate([side > 0 ? joiner_width/2 : -half_width, 0, -1])
+        linear_extrude(panel_thk+2)
+          vent_grid(half_width - joiner_width/2, depth);
+
+      // Vent holes in front panel (below and above sled area)
+      // Below sled slots
+      if (sled_z_start > vent_margin * 2) {
+        translate([side > 0 ? half_width/4 : -half_width/4, front_panel_thk+1, sled_z_start/2])
+          rotate([90, 0, 0])
+            linear_extrude(front_panel_thk+2)
+              vent_grid(half_width/2, sled_z_start);
+      }
+      // Above sled slots
+      top_space = rack_height - sled_z_start - pc_height;
+      if (top_space > vent_margin * 2) {
+        translate([side > 0 ? half_width/4 : -half_width/4, front_panel_thk+1, sled_z_start + pc_height + top_space/2])
+          rotate([90, 0, 0])
+            linear_extrude(front_panel_thk+2)
+              vent_grid(half_width/2, top_space);
+      }
+
+      // Mini PC sled cutouts for this half (centered)
+      for (i = [0:num_pcs_per_half-1]) {
+        slot_x = sled_start + i * (pc_width + sled_wall);
+        translate([slot_x, -1, sled_z_start])
+          cube([pc_width, sled_depth + 1, pc_height]);
+      }
+
+      // Screw holes for sled mounting
+      for (i = [0:num_pcs_per_half-1]) {
+        slot_x = sled_start + i * (pc_width + sled_wall) + pc_width/2;
+        // Top screw hole
+        translate([slot_x, front_panel_thk/2, sled_z_start + pc_height + 5])
+          rotate([90, 0, 0])
+            cylinder(h=front_panel_thk+2, d=screw_hole_dia, center=true);
+        // Bottom screw hole
+        translate([slot_x, front_panel_thk/2, sled_z_start - 5])
+          rotate([90, 0, 0])
+            cylinder(h=front_panel_thk+2, d=screw_hole_dia, center=true);
+      }
+      
+      // Female dovetail cutouts (left half only)
+      if (side < 0) {
+        for (i = [0:num_dovetails-1]) {
+          z_pos = (rack_height / (num_dovetails + 1)) * (i + 1);
+          translate([0, front_panel_thk/2, z_pos - dovetail_height/2 - dovetail_clearance])
+            dovetail_female(dovetail_height + 2*dovetail_clearance);
+        }
+      }
+      
+      // Optional screw holes through dovetail joints (both halves)
+      for (i = [0:num_dovetails-1]) {
+        z_pos = (rack_height / (num_dovetails + 1)) * (i + 1);
+        // Horizontal screw hole through the dovetail joint
+        translate([side > 0 ? -dovetail_depth - 1 : dovetail_depth + 1, front_panel_thk/2, z_pos])
+          rotate([0, 90, 0])
+            cylinder(h=dovetail_depth + front_panel_thk, d=screw_hole_dia);
+      }
+      
+      // Join screw holes in tabs (horizontal, facing center)
+      // Top tab screw hole
+      translate([side > 0 ? -1 : 1, front_panel_thk + rib_height/2, rack_height - rib_width - join_flange_thk/2])
+        rotate([0, 90, 0])
+          cylinder(h=join_flange_thk+2, d=screw_hole_dia);
+      // Bottom tab screw hole
+      translate([side > 0 ? -1 : 1, front_panel_thk + rib_height/2, rib_width + join_flange_thk/2])
+        rotate([0, 90, 0])
+          cylinder(h=join_flange_thk+2, d=screw_hole_dia);
+      
+      // Joiner plate screw holes in bottom panel
+      // Front screw hole
+      translate([side > 0 ? joiner_width/4 : -joiner_width/4, joiner_screw_inset, -1])
+        cylinder(h=panel_thk+2, d=screw_hole_dia);
+      // Middle screw hole
+      translate([side > 0 ? joiner_width/4 : -joiner_width/4, joiner_length/2, -1])
+        cylinder(h=panel_thk+2, d=screw_hole_dia);
+      // Back screw hole
+      translate([side > 0 ? joiner_width/4 : -joiner_width/4, joiner_length - joiner_screw_inset, -1])
+        cylinder(h=panel_thk+2, d=screw_hole_dia);
+      // Far back screw hole (near brace)
+      translate([side > 0 ? joiner_width/4 : -joiner_width/4, depth - joiner_screw_inset, -1])
+        cylinder(h=panel_thk+2, d=screw_hole_dia);
     }
 
-    // Front ears
-    translate([-rack_width/2, 0, 0])
-      cube([ear_width, ear_thk, rack_height]);
-
-    translate([rack_width/2-ear_width, 0, 0])
-      cube([ear_width, ear_thk, rack_height]);
-  }
-
-  // Square rack holes
-  for (z = hole_z){
-    translate([-rack_width/2 + hole_edge_offset, ear_thk/2, z])
-      cube([hole_size, ear_thk+1, hole_size], center=true);
-
-    translate([ rack_width/2 - hole_edge_offset, ear_thk/2, z])
-      cube([hole_size, ear_thk+1, hole_size], center=true);
-  }
-
-  // Vent holes in bottom panel
-  translate([-body_width/2, 0, -1])
-    linear_extrude(panel_thk+2)
-      vent_grid(body_width, depth);
-
-  // Vent holes in front panel (below and above sled area)
-  sled_z_start = (rack_height - pc_height) / 2;
-  // Below sled slots
-  if (sled_z_start > vent_margin * 2) {
-    translate([0, front_panel_thk+1, sled_z_start/2])
-      rotate([90, 0, 0])
-        linear_extrude(front_panel_thk+2)
-          vent_grid(body_width, sled_z_start);
-  }
-  // Above sled slots
-  top_space = rack_height - sled_z_start - pc_height;
-  if (top_space > vent_margin * 2) {
-    translate([0, front_panel_thk+1, sled_z_start + pc_height + top_space/2])
-      rotate([90, 0, 0])
-        linear_extrude(front_panel_thk+2)
-          vent_grid(body_width, top_space);
-  }
-
-  // Mini PC sled cutouts - slots for each PC
-  // Each slot is pc_width wide, pc_height tall, runs through the depth
-  sled_z_start = (rack_height - pc_height) / 2;  // center vertically
-  for (i = [0:num_pcs-1]) {
-    translate([sled_start_x + i * (pc_width + sled_wall), -1, sled_z_start])
-      cube([pc_width, sled_depth + 1, pc_height]);
-  }
-
-  // Screw holes in front panel for sled mounting (2 per slot - top and bottom)
-  for (i = [0:num_pcs-1]) {
-    // Top screw hole (above sled slot)
-    translate([sled_start_x + i * (pc_width + sled_wall) + pc_width/2, front_panel_thk/2, sled_z_start + pc_height + 5])
-      rotate([90, 0, 0])
-        cylinder(h=front_panel_thk+2, d=screw_hole_dia, center=true);
-    // Bottom screw hole (below sled slot)
-    translate([sled_start_x + i * (pc_width + sled_wall) + pc_width/2, front_panel_thk/2, sled_z_start - 5])
-      rotate([90, 0, 0])
-        cylinder(h=front_panel_thk+2, d=screw_hole_dia, center=true);
+    // Diagonal brace
+    translate([side > 0 ? half_width - panel_thk - brace_width : -half_width + panel_thk, 0, 0])
+      hull() {
+        // Top front - joins to back of top of front panel
+        translate([0, front_panel_thk + rib_height, rack_height - brace_thk])
+          cube([brace_width, brace_thk, brace_thk]);
+        // Bottom back
+        translate([0, depth - brace_thk, 0])
+          cube([brace_width, brace_thk, brace_thk]);
+      }
   }
 }
 
-// Diagonal braces from top front to back bottom (left and right sides)
-// Left brace
-translate([-body_width/2 + panel_thk, 0, 0])
-  hull() {
-    // Top front - joins to back of top of front panel
-    translate([0, front_panel_thk + rib_height, rack_height - brace_thk])
-      cube([brace_width, brace_thk, brace_thk]);
-    // Bottom back
-    translate([0, depth - brace_thk, 0])
-      cube([brace_width, brace_thk, brace_thk]);
+// Bottom joiner plate (printed separately, joins both halves along the bottom)
+module bottom_joiner() {
+  difference() {
+    union() {
+      // Main joiner plate running front to back
+      translate([-joiner_width/2, 0, 0])
+        cube([joiner_width, joiner_length, joiner_thk]);
+      
+      // Back section extending to full depth
+      translate([-joiner_width/2, joiner_length, 0])
+        cube([joiner_width, depth - joiner_length, joiner_thk]);
+      
+      // Front vertical tabs to connect to front panel tabs
+      // Left tab
+      translate([-join_flange_thk, 0, 0])
+        cube([join_flange_thk, front_panel_thk + rib_height + 10, joiner_thk]);
+      translate([-join_flange_thk, front_panel_thk, joiner_thk])
+        cube([join_flange_thk, rib_height + 10, rib_width + join_flange_thk]);
+      // Right tab  
+      translate([0, 0, 0])
+        cube([join_flange_thk, front_panel_thk + rib_height + 10, joiner_thk]);
+      translate([0, front_panel_thk, joiner_thk])
+        cube([join_flange_thk, rib_height + 10, rib_width + join_flange_thk]);
+      
+      // Top tabs for connecting at top of front panel
+      translate([-join_flange_thk, front_panel_thk, rack_height - rib_width - join_flange_thk])
+        cube([join_flange_thk, rib_height + 10, join_flange_thk]);
+      translate([0, front_panel_thk, rack_height - rib_width - join_flange_thk])
+        cube([join_flange_thk, rib_height + 10, join_flange_thk]);
+    }
+    
+    // Screw holes for left half
+    translate([-joiner_width/4, joiner_screw_inset, -1])
+      cylinder(h=joiner_thk+2, d=screw_hole_dia);
+    translate([-joiner_width/4, joiner_length/2, -1])
+      cylinder(h=joiner_thk+2, d=screw_hole_dia);
+    translate([-joiner_width/4, joiner_length - joiner_screw_inset, -1])
+      cylinder(h=joiner_thk+2, d=screw_hole_dia);
+    translate([-joiner_width/4, depth - joiner_screw_inset, -1])
+      cylinder(h=joiner_thk+2, d=screw_hole_dia);
+    
+    // Screw holes for right half
+    translate([joiner_width/4, joiner_screw_inset, -1])
+      cylinder(h=joiner_thk+2, d=screw_hole_dia);
+    translate([joiner_width/4, joiner_length/2, -1])
+      cylinder(h=joiner_thk+2, d=screw_hole_dia);
+    translate([joiner_width/4, joiner_length - joiner_screw_inset, -1])
+      cylinder(h=joiner_thk+2, d=screw_hole_dia);
+    translate([joiner_width/4, depth - joiner_screw_inset, -1])
+      cylinder(h=joiner_thk+2, d=screw_hole_dia);
+    
+    // Screw holes for front panel top tabs (horizontal)
+    translate([-join_flange_thk - 1, front_panel_thk + rib_height/2, rack_height - rib_width - join_flange_thk/2])
+      rotate([0, 90, 0])
+        cylinder(h=join_flange_thk+2, d=screw_hole_dia);
+    translate([1, front_panel_thk + rib_height/2, rack_height - rib_width - join_flange_thk/2])
+      rotate([0, 90, 0])
+        cylinder(h=join_flange_thk+2, d=screw_hole_dia);
+    
+    // Screw holes for front panel bottom tabs (horizontal)
+    translate([-join_flange_thk - 1, front_panel_thk + rib_height/2, rib_width + join_flange_thk/2])
+      rotate([0, 90, 0])
+        cylinder(h=join_flange_thk+2, d=screw_hole_dia);
+    translate([1, front_panel_thk + rib_height/2, rib_width + join_flange_thk/2])
+      rotate([0, 90, 0])
+        cylinder(h=join_flange_thk+2, d=screw_hole_dia);
   }
+}
 
-// Right brace
-translate([body_width/2 - panel_thk - brace_width, 0, 0])
-  hull() {
-    // Top front - joins to back of top of front panel
-    translate([0, front_panel_thk + rib_height, rack_height - brace_thk])
-      cube([brace_width, brace_thk, brace_thk]);
-    // Bottom back
-    translate([0, depth - brace_thk, 0])
-      cube([brace_width, brace_thk, brace_thk]);
-  }
-
-} // end main union
+// --------------------
+// Render based on print_part setting
+// --------------------
+if (print_part == "left") {
+  rack_half(-1);
+} else if (print_part == "right") {
+  rack_half(1);
+} else if (print_part == "joiner") {
+  // Rotate joiner flat for printing
+  rotate([0, 0, 0])
+    bottom_joiner();
+} else {
+  // Show both halves assembled with joiner
+  translate([-half_spacing/2, 0, 0])
+    rack_half(-1);
+  translate([half_spacing/2, 0, 0])
+    rack_half(1);
+  
+  // Show joiner in position
+  color("blue", 0.8)
+    translate([0, 0, -joiner_thk])
+      bottom_joiner();
+}
