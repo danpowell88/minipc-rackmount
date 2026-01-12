@@ -23,7 +23,7 @@ half_spacing = 0;     // gap between halves when showing both (0 for assembled v
 rack_height = 133.35;    // 3U (3 × 44.45mm)
 rack_width  = 482.6;     // 19"
 body_width  = 450;
-depth       = 300;
+depth       = 245;       // reduced to fit 250mm print bed
 
 ear_width   = 15.875;    // standard rack ear width (0.625")
 ear_thk     = 5;
