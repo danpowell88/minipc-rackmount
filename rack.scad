@@ -70,10 +70,24 @@ sled_wall = 3;     // wall between sled slots
 screw_hole_dia = 3.5;  // M3 screw holes
 screw_boss_dia = 8;    // boss around screw holes
 
+// Keystone jack dimensions (rear-insert/flush-front)
+keystone_front_width = 14.5;        // Front opening width
+keystone_front_height = 16.0;       // Front opening height
+keystone_panel_thk = 2.0;           // Panel thickness for flush stop
+keystone_rear_width = 18.3;         // Rear cavity width (+ tolerance)
+keystone_rear_height = 20.3;        // Rear cavity height (+ tolerance)
+keystone_relief_height = 2.5;       // Retention tab relief height
+keystone_relief_depth = 1.5;        // Retention tab relief depth
+keystone_depth_total = 32;          // Total depth for keystone body and cables
+keystone_corner_radius = 0.5;       // Corner radius for front opening
+keystone_chamfer = 0.5;             // Rear edge chamfer for easy insertion
+keystone_spacing = 18;              // Center-to-center spacing between keystones
+keystones_per_slot = 3;             // Number of keystones per sled slot
+
 // Diagonal brace dimensions
-brace_width = 25;        // increased for more strength
+brace_width = 15;        // reduced to avoid overlapping slots
 brace_thk = 5;
-brace_vert_supports = 3;  // number of vertical supports along brace
+brace_vert_supports = 2;  // reduced number of vertical supports
 brace_vert_width = 4;     // width of vertical supports
 
 // Rack ear gusset dimensions (triangular support)
@@ -115,15 +129,27 @@ dovetail_spacing = 35;    // spacing between dovetails
 dovetail_clearance = 0.3; // clearance for fit
 num_dovetails = 3;        // number of dovetails along front panel height
 
-// Calculate how many PCs fit
-num_pcs_total = floor((body_width - 20) / (pc_width + sled_wall));
-num_pcs_per_half = floor(num_pcs_total / 2);
-num_pcs = num_pcs_per_half * 2;  // total sleds
-
 // Calculate centered sled positions
 // Center the sleds within each half, leaving gap at center for joiner
 sled_offset = 15;  // offset from center to leave room for joining
 half_width = body_width / 2;
+
+// Calculate how many PCs fit - adjust for keystone jacks
+// Keystones alternate sides: |K|PC||PC|K| - more efficient packing
+keystone_column_width = keystone_rear_width + 4;  // keystone + small margin
+
+// Available width per half: from join area to inner edge of ear reinforcement
+// half_width = 225, sled_offset = 15 (join area)
+// Reduce margin near ears to maximize slots
+available_width_per_half = half_width - sled_offset - 5;  // 225 - 15 - 5 = 205mm
+
+// Each PC+keystone pair needs: pc_width + keystone_column_width + sled_wall
+slot_pitch = pc_width + keystone_column_width + sled_wall;  // 41 + 22 + 3 = 66mm
+num_pcs_per_half = floor(available_width_per_half / slot_pitch);  // 205 / 66 = 3 slots
+num_pcs = num_pcs_per_half * 2;  // total sleds
+
+// Slots start from the join area and go outward toward ears
+// This keeps the center clean for the join
 
 // --------------------
 // Modules
@@ -139,6 +165,39 @@ module vent_grid(w, h){
     for (col = [0:cols-1])
       translate([start_x + col*vent_spacing, start_y + row*vent_spacing])
         square(vent_hole_size, center=true);
+}
+
+// Keystone jack slot (rear-insert with flush front)
+// Oriented vertically: width in X, height in Z, depth in Y
+// Origin at front face center of keystone
+module keystone_jack_slot() {
+  // Front opening (flush face) - cuts completely through front panel
+  // Width (X) x Height (Z), extruded through Y (front to back)
+  translate([0, front_panel_thk + 1, 0])
+    rotate([90, 0, 0])
+      linear_extrude(front_panel_thk + 2)  // Full thickness + extra to ensure complete cut
+        offset(r=keystone_corner_radius)
+          square([keystone_front_width - 2*keystone_corner_radius, 
+                  keystone_front_height - 2*keystone_corner_radius], center=true);
+  
+  // Rear cavity (stepped opening) - for keystone body and tabs
+  // Extends from back of front panel further into the rack
+  translate([0, front_panel_thk + keystone_depth_total, 0])
+    rotate([90, 0, 0])
+      linear_extrude(keystone_depth_total)
+        square([keystone_rear_width, keystone_rear_height], center=true);
+  
+  // Top retention tab relief (above rear cavity)
+  translate([0, front_panel_thk + keystone_depth_total, keystone_rear_height/2 + keystone_relief_height])
+    rotate([90, 0, 0])
+      linear_extrude(keystone_depth_total)
+        square([keystone_rear_width, keystone_relief_height * 2], center=true);
+  
+  // Bottom retention tab relief (below rear cavity)
+  translate([0, front_panel_thk + keystone_depth_total, -keystone_rear_height/2 - keystone_relief_height])
+    rotate([90, 0, 0])
+      linear_extrude(keystone_depth_total)
+        square([keystone_rear_width, keystone_relief_height * 2], center=true);
 }
 
 // Dovetail profile (2D) - trapezoidal shape
@@ -176,9 +235,10 @@ module dovetail_female(height) {
 module rack_half(side) {
   sled_z_start = (rack_height - pc_height) / 2;
   
-  // Calculate sled start position - centered with offset from middle
-  sled_area_width = num_pcs_per_half * (pc_width + sled_wall) - sled_wall;
-  sled_start = side > 0 ? sled_offset : -(sled_offset + sled_area_width);
+  // Sled positions: start from join area, go outward toward ears
+  // Right half: slots go from sled_offset outward (positive X)
+  // Left half: slots go from -sled_offset outward (negative X)
+  sled_start = side > 0 ? sled_offset : -sled_offset - slot_pitch;
   
   union() {
     difference(){
@@ -193,16 +253,37 @@ module rack_half(side) {
           cube([half_width, front_panel_thk, rack_height]);
 
         // Horizontal reinforcement ribs on back of front panel
-        // Top rib (half)
-        translate([side > 0 ? 0 : -half_width, front_panel_thk, rack_height - rib_width])
-          cube([half_width, rib_height, rib_width]);
-        // Bottom rib (half)
-        translate([side > 0 ? 0 : -half_width, front_panel_thk, 0])
-          cube([half_width, rib_height, rib_width]);
+        // Only in areas outside the slot region (toward ears)
+        // Calculate slot region extent
+        slot_region_start = side > 0 ? sled_offset : -half_width;
+        slot_region_end = side > 0 ? half_width : -sled_offset;
+        last_slot_end = side > 0 
+          ? sled_offset + num_pcs_per_half * slot_pitch 
+          : -sled_offset - num_pcs_per_half * slot_pitch;
+        
+        // Top rib - only outside slot area (between last slot and ear)
+        if (side > 0) {
+          translate([last_slot_end, front_panel_thk, rack_height - rib_width])
+            cube([half_width - last_slot_end, rib_height, rib_width]);
+        } else {
+          translate([-half_width, front_panel_thk, rack_height - rib_width])
+            cube([-last_slot_end - half_width, rib_height, rib_width]);
+        }
+        // Bottom rib - only outside slot area (between last slot and ear)
+        if (side > 0) {
+          translate([last_slot_end, front_panel_thk, 0])
+            cube([half_width - last_slot_end, rib_height, rib_width]);
+        } else {
+          translate([-half_width, front_panel_thk, 0])
+            cube([-last_slot_end - half_width, rib_height, rib_width]);
+        }
         
         // Vertical ribs for sled slots on this half
+        // Ribs between slots and at edges
         for (i = [0:num_pcs_per_half]) {
-          rib_x = sled_start + i * (pc_width + sled_wall) - sled_wall/2;
+          rib_x = side > 0 
+            ? sled_offset + i * slot_pitch - sled_wall/2
+            : -sled_offset - i * slot_pitch + sled_wall/2;
           translate([rib_x - rib_width/2, front_panel_thk, 0])
             cube([rib_width, rib_height, rack_height]);
         }
@@ -280,19 +361,16 @@ module rack_half(side) {
           }
         }
         
-        // Inner faceplate screw tabs - overlap tabs that extend into own side's rib structure
-        // Right half has tabs extending left (negative X) for overlap
-        // Left half has tabs extending right (positive X) for overlap
-        // Both extend from center edge to first vertical rib on their OWN side
+        // Inner faceplate screw tabs - overlap tabs at center join
+        // Right half: tabs extend from 0 to sled_offset (into center join area)
+        // Left half: tabs extend from -sled_offset to 0 (into center join area)
         
-        // First vertical rib position (closest to center on each side)
-        first_rib_center = sled_start - sled_wall/2;  // center of first rib
-        // For right side (side > 0): first_rib_center is positive, tab goes from -join_flange_thk to first_rib_center + rib_width/2
-        // For left side (side < 0): first_rib_center is negative, tab goes from first_rib_center - rib_width/2 to join_flange_thk
+        // First vertical rib is at join edge
+        first_rib_x = side > 0 ? sled_offset : -sled_offset;
         
-        // Calculate full tab extent
-        tab_inner_edge = side > 0 ? -join_flange_thk : first_rib_center - rib_width/2;
-        tab_outer_edge = side > 0 ? first_rib_center + rib_width/2 : join_flange_thk;
+        // Tab extends from center overlap into own side
+        tab_inner_edge = side > 0 ? -join_flange_thk : first_rib_x - rib_width/2;
+        tab_outer_edge = side > 0 ? first_rib_x + rib_width/2 : join_flange_thk;
         tab_full_width = tab_outer_edge - tab_inner_edge;
         
         // Top screw tab - full width from overlap to first vertical rib
@@ -381,22 +459,65 @@ module rack_half(side) {
         }
       }
 
-      // Mini PC sled cutouts for this half (centered)
+      // Mini PC sled cutouts for this half
+      // Right half: keystones on left of PC (toward center), slots go outward
+      // Left half: keystones on right of PC (toward center), slots go outward
       for (i = [0:num_pcs_per_half-1]) {
-        slot_x = sled_start + i * (pc_width + sled_wall);
-        translate([slot_x, -1, sled_z_start])
+        // Calculate slot position - going outward from join area
+        slot_base = side > 0 
+          ? sled_offset + i * slot_pitch
+          : -sled_offset - (i + 1) * slot_pitch;
+        
+        // PC position within slot: keystone first (toward center), then PC
+        pc_x = side > 0 
+          ? slot_base + keystone_column_width  // keystones on left, PC on right
+          : slot_base;  // PC on left, keystones on right
+        
+        translate([pc_x, -1, sled_z_start])
           cube([pc_width, sled_depth + 1, pc_height]);
+      }
+      
+      // Keystone jack cutouts - 3 per slot, stacked vertically
+      // Keystones are between the join area and the PC slot
+      for (i = [0:num_pcs_per_half-1]) {
+        slot_base = side > 0 
+          ? sled_offset + i * slot_pitch
+          : -sled_offset - (i + 1) * slot_pitch;
+        
+        // Keystone column position: between join and PC
+        keystone_center_x = side > 0 
+          ? slot_base + keystone_column_width/2  // left of PC
+          : slot_base + pc_width + keystone_column_width/2;  // right of PC
+        
+        keystone_z_center = sled_z_start + pc_height/2;
+        
+        // 3 keystones stacked vertically, centered on slot height
+        keystone_v_spacing = keystone_front_height + 4;
+        keystone_start_z = keystone_z_center - (keystones_per_slot - 1) * keystone_v_spacing / 2;
+        
+        for (j = [0:keystones_per_slot-1]) {
+          keystone_z = keystone_start_z + j * keystone_v_spacing;
+          translate([keystone_center_x, 0, keystone_z])
+            keystone_jack_slot();
+        }
       }
 
       // Screw holes for sled mounting
       for (i = [0:num_pcs_per_half-1]) {
-        slot_x = sled_start + i * (pc_width + sled_wall) + pc_width/2;
+        slot_base = side > 0 
+          ? sled_offset + i * slot_pitch
+          : -sled_offset - (i + 1) * slot_pitch;
+        
+        pc_x = side > 0 
+          ? slot_base + keystone_column_width + pc_width/2
+          : slot_base + pc_width/2;
+        
         // Top screw hole
-        translate([slot_x, front_panel_thk/2, sled_z_start + pc_height + 5])
+        translate([pc_x, front_panel_thk/2, sled_z_start + pc_height + 5])
           rotate([90, 0, 0])
             cylinder(h=front_panel_thk+2, d=screw_hole_dia, center=true);
         // Bottom screw hole
-        translate([slot_x, front_panel_thk/2, sled_z_start - 5])
+        translate([pc_x, front_panel_thk/2, sled_z_start - 5])
           rotate([90, 0, 0])
             cylinder(h=front_panel_thk+2, d=screw_hole_dia, center=true);
       }
@@ -446,7 +567,8 @@ module rack_half(side) {
     }
 
     // Diagonal brace with diagonal supports (print-friendly when front face down)
-    brace_x = side > 0 ? half_width - panel_thk - brace_width : -half_width + panel_thk;
+    // Position at outer edge of panel, past all slots
+    brace_x = side > 0 ? half_width - brace_width : -half_width;
     
     // Main diagonal brace
     translate([brace_x, 0, 0])
