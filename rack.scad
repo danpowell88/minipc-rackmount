@@ -57,9 +57,9 @@ hole_z = [
 ];
 
 // Vent hole pattern (simple grid for strength and easy printing)
-vent_hole_size = 8;      // square hole size
-vent_spacing = 12;       // center-to-center spacing
-vent_margin = 10;        // margin from edges
+vent_hole_size = 12;     // square hole size (larger = less material)
+vent_spacing = 14;       // center-to-center spacing (2mm walls between holes)
+vent_margin = 4;         // margin from edges (reduced to fit more holes)
 
 // Mini PC dimensions
 pc_width  = 41;
@@ -209,21 +209,17 @@ module rack_half(side) {
 
         // Front ear
         if (side > 0) {
-          translate([rack_width/2 - ear_width, 0, 0])
-            cube([ear_width, ear_thk, rack_height]);
-          // Bottom triangular gusset for ear support
-          translate([half_width - panel_thk, 0, 0])
-            hull() {
-              cube([panel_thk, ear_thk, ear_gusset_height]);
-              cube([panel_thk, ear_gusset_depth, panel_thk]);
-            }
-          // Top triangular gusset for ear support
-          translate([half_width - panel_thk, 0, rack_height - ear_gusset_height])
-            hull() {
-              cube([panel_thk, ear_thk, ear_gusset_height]);
-              translate([0, 0, ear_gusset_height - panel_thk])
-                cube([panel_thk, ear_gusset_depth, panel_thk]);
-            }
+          // Main ear - extended inward to meet faceplate
+          translate([half_width, 0, 0])
+            cube([rack_width/2 - half_width, ear_thk, rack_height]);
+          
+          // Fill gap at top - solid block connecting ear to faceplate
+          translate([half_width - ear_width, 0, rack_height - panel_thk])
+            cube([ear_width, front_panel_thk, panel_thk]);
+          // Fill gap at bottom - solid block connecting ear to faceplate
+          translate([half_width - ear_width, 0, 0])
+            cube([ear_width, front_panel_thk, panel_thk]);
+          
           // Deep reinforcement ribs connecting middle solid ear section to rib structure
           // These extend back (in Y) from the ear through the front panel to the ribs behind
           // The middle section (2U) has no holes and provides the main structural anchor
@@ -245,21 +241,17 @@ module rack_half(side) {
           translate([half_width - ear_width, front_panel_thk, middle_z_end])
             cube([ear_width, rib_height, rack_height - middle_z_end]);
         } else {
+          // Main ear - extended inward to meet faceplate
           translate([-rack_width/2, 0, 0])
-            cube([ear_width, ear_thk, rack_height]);
-          // Bottom triangular gusset for ear support
+            cube([rack_width/2 - half_width, ear_thk, rack_height]);
+          
+          // Fill gap at top - solid block connecting ear to faceplate
+          translate([-half_width, 0, rack_height - panel_thk])
+            cube([ear_width, front_panel_thk, panel_thk]);
+          // Fill gap at bottom - solid block connecting ear to faceplate
           translate([-half_width, 0, 0])
-            hull() {
-              cube([panel_thk, ear_thk, ear_gusset_height]);
-              cube([panel_thk, ear_gusset_depth, panel_thk]);
-            }
-          // Top triangular gusset for ear support
-          translate([-half_width, 0, rack_height - ear_gusset_height])
-            hull() {
-              cube([panel_thk, ear_thk, ear_gusset_height]);
-              translate([0, 0, ear_gusset_height - panel_thk])
-                cube([panel_thk, ear_gusset_depth, panel_thk]);
-            }
+            cube([ear_width, front_panel_thk, panel_thk]);
+          
           // Deep reinforcement ribs connecting middle solid ear section to rib structure
           middle_z_start = hole_z[middle_holes_start] - hole_size/2 - 3;
           middle_z_end = hole_z[middle_holes_end] + hole_size/2 + 3;
@@ -339,26 +331,54 @@ module rack_half(side) {
         }
       }
 
-      // Vent holes in bottom panel (half) - avoid joiner area
-      translate([side > 0 ? joiner_width/2 : -half_width, 0, -1])
-        linear_extrude(panel_thk+2)
-          vent_grid(half_width - joiner_width/2, depth);
+      // Vent holes in bottom panel (half) - avoid joiner area and diagonal brace
+      // Right side: from joiner_width/2 to brace start
+      // Left side: from brace end to -joiner_width/2
+      if (side > 0) {
+        // Right half: vent from joiner edge to brace
+        vent_x_start = joiner_width/2;
+        vent_x_end = half_width - panel_thk - brace_width;
+        translate([vent_x_start, 0, -1])
+          linear_extrude(panel_thk+2)
+            vent_grid(vent_x_end - vent_x_start, depth);
+      } else {
+        // Left half: vent from brace end to joiner edge
+        vent_x_start = -half_width + panel_thk + brace_width;
+        vent_x_end = -joiner_width/2;
+        translate([vent_x_start, 0, -1])
+          linear_extrude(panel_thk+2)
+            vent_grid(vent_x_end - vent_x_start, depth);
+      }
 
       // Vent holes in front panel (below and above sled area)
       // Below sled slots
-      if (sled_z_start > vent_margin * 2) {
-        translate([side > 0 ? half_width/4 : -half_width/4, front_panel_thk+1, sled_z_start/2])
-          rotate([90, 0, 0])
-            linear_extrude(front_panel_thk+2)
-              vent_grid(half_width/2, sled_z_start);
+      if (sled_z_start > vent_margin * 2 + vent_hole_size) {
+        if (side > 0) {
+          translate([0, front_panel_thk+1, 0])
+            rotate([90, 0, 0])
+              linear_extrude(front_panel_thk+2)
+                vent_grid(half_width/2, sled_z_start);
+        } else {
+          translate([-half_width/2, front_panel_thk+1, 0])
+            rotate([90, 0, 0])
+              linear_extrude(front_panel_thk+2)
+                vent_grid(half_width/2, sled_z_start);
+        }
       }
       // Above sled slots
       top_space = rack_height - sled_z_start - pc_height;
-      if (top_space > vent_margin * 2) {
-        translate([side > 0 ? half_width/4 : -half_width/4, front_panel_thk+1, sled_z_start + pc_height + top_space/2])
-          rotate([90, 0, 0])
-            linear_extrude(front_panel_thk+2)
-              vent_grid(half_width/2, top_space);
+      if (top_space > vent_margin * 2 + vent_hole_size) {
+        if (side > 0) {
+          translate([0, front_panel_thk+1, sled_z_start + pc_height])
+            rotate([90, 0, 0])
+              linear_extrude(front_panel_thk+2)
+                vent_grid(half_width/2, top_space);
+        } else {
+          translate([-half_width/2, front_panel_thk+1, sled_z_start + pc_height])
+            rotate([90, 0, 0])
+              linear_extrude(front_panel_thk+2)
+                vent_grid(half_width/2, top_space);
+        }
       }
 
       // Mini PC sled cutouts for this half (centered)
@@ -425,7 +445,7 @@ module rack_half(side) {
       }
     }
 
-    // Diagonal brace with vertical supports
+    // Diagonal brace with diagonal supports (print-friendly when front face down)
     brace_x = side > 0 ? half_width - panel_thk - brace_width : -half_width + panel_thk;
     
     // Main diagonal brace
@@ -439,18 +459,34 @@ module rack_half(side) {
           cube([brace_width, brace_thk, brace_thk]);
       }
     
-    // Vertical supports along the diagonal brace
+    // Diagonal supports along the main brace - same angle as main brace
+    // These go from bottom panel diagonally up following the exact brace angle
     brace_run = depth - front_panel_thk - rib_height - brace_thk;  // horizontal length of brace
     brace_rise = rack_height - brace_thk;  // vertical rise of brace
+    brace_angle_ratio = brace_rise / brace_run;  // rise per unit run
+    
     for (i = [1:brace_vert_supports]) {
-      // Calculate position along the brace
+      // Calculate position along the brace where support meets it
       t = i / (brace_vert_supports + 1);
-      y_pos = front_panel_thk + rib_height + t * brace_run;
+      y_top = front_panel_thk + rib_height + t * brace_run;
       z_top = rack_height - brace_thk - t * brace_rise;
       
-      // Vertical support from bottom panel to brace
-      translate([brace_x + brace_width/2 - brace_vert_width/2, y_pos - brace_vert_width/2, 0])
-        cube([brace_vert_width, brace_vert_width, z_top + brace_thk]);
+      // Calculate bottom position - same angle as main brace
+      // Support goes from (y_bottom, 0) to (y_top, z_top) at same angle
+      // Clamp to not go in front of front panel + ribs
+      y_bottom_calc = y_top - z_top / brace_angle_ratio;
+      y_bottom = max(y_bottom_calc, front_panel_thk + rib_height);
+      
+      // Diagonal support from bottom panel to brace (same angle as main brace)
+      translate([brace_x, 0, 0])
+        hull() {
+          // Bottom point
+          translate([0, y_bottom, 0])
+            cube([brace_width, brace_vert_width, brace_thk]);
+          // Top point (at the main brace)
+          translate([0, y_top, z_top])
+            cube([brace_width, brace_vert_width, brace_thk]);
+        }
     }
   }
 }
