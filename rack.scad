@@ -90,18 +90,20 @@ sled_wall = 3;     // wall between sled slots
 screw_hole_dia = 3.5;  // M3 screw holes
 screw_boss_dia = 8;    // boss around screw holes
 
-// Keystone jack dimensions (rear-insert/flush-front)
-keystone_front_width = 14.5;        // Front opening width
-keystone_front_height = 16.0;       // Front opening height
-keystone_panel_thk = 2.0;           // Panel thickness for flush stop
-keystone_rear_width = 18.3;         // Rear cavity width (+ tolerance)
-keystone_rear_height = 20.3;        // Rear cavity height (+ tolerance)
-keystone_relief_height = 2.5;       // Retention tab relief height
-keystone_relief_depth = 1.5;        // Retention tab relief depth
-keystone_depth_total = 32;          // Total depth for keystone body and cables
-keystone_corner_radius = 0.5;       // Corner radius for front opening
-keystone_chamfer = 0.5;             // Rear edge chamfer for easy insertion
-keystone_spacing = 18;              // Center-to-center spacing between keystones
+// Keystone jack dimensions (based on marcuswu/RJ45KeystoneReceiver)
+// Standard keystone: 18mm wide x 25.9mm high receiver, snaps in from rear
+keystone_outside_width = 18;        // Receiver outside width
+keystone_outside_height = 25.9;     // Receiver outside height (25 + 0.9 clip adjustment)
+keystone_outside_depth = 9.9;       // Receiver depth
+keystone_wall = 1.55;               // Wall thickness
+keystone_inside_width = 14.9;       // Inside width (outside - 2*wall)
+keystone_inside_height = 19.44;     // Inside height for jack body
+keystone_exterior_slot = 7.9;       // Depth of exterior slot
+keystone_clip_height = 1.35;        // Height of clip bars
+keystone_clip_radius = 1.35;        // Radius of clip bar rounded edge
+keystone_front_width = 14.9;        // Front opening width (visible face)
+keystone_front_height = 16.0;       // Front opening height (visible face)
+keystone_spacing = 28;              // Center-to-center spacing between keystones (was 18, too tight)
 keystones_per_slot = 3;             // Number of keystones per sled slot
 
 // Diagonal brace dimensions
@@ -155,7 +157,7 @@ half_width = body_width / 2;
 
 // Calculate how many PCs fit - adjust for keystone jacks
 // Keystones alternate sides: |K|PC||PC|K| - more efficient packing
-keystone_column_width = keystone_rear_width + 4;  // keystone + small margin
+keystone_column_width = keystone_outside_width + 4;  // keystone receiver width + small margin
 
 // Available width per half: from join area to inner edge of ear reinforcement
 // half_width = 225, sled_offset = 15 (join area)
@@ -186,37 +188,37 @@ module vent_grid(w, h){
         square(vent_hole_size, center=true);
 }
 
-// Keystone jack slot (rear-insert with flush front)
+// Keystone jack slot (based on marcuswu/RJ45KeystoneReceiver)
+// Creates a cutout that accepts standard keystone jacks from the rear
 // Oriented vertically: width in X, height in Z, depth in Y
 // Origin at front face center of keystone
 module keystone_jack_slot() {
-  // Front opening (flush face) - cuts completely through front panel
-  // Width (X) x Height (Z), extruded through Y (front to back)
+  // Front opening (visible face) - where RJ45 connector shows
   translate([0, front_panel_thk + 1, 0])
     rotate([90, 0, 0])
-      linear_extrude(front_panel_thk + 2)  // Full thickness + extra to ensure complete cut
-        offset(r=keystone_corner_radius)
-          square([keystone_front_width - 2*keystone_corner_radius, 
-                  keystone_front_height - 2*keystone_corner_radius], center=true);
+      linear_extrude(front_panel_thk + 2)
+        square([keystone_front_width, keystone_front_height], center=true);
   
-  // Rear cavity (stepped opening) - for keystone body and tabs
-  // Extends from back of front panel further into the rack
-  translate([0, front_panel_thk + keystone_depth_total, 0])
+  // Main receiver cavity - where keystone body sits
+  // This is the full outside dimensions of the receiver
+  translate([0, front_panel_thk + keystone_outside_depth, 0])
     rotate([90, 0, 0])
-      linear_extrude(keystone_depth_total)
-        square([keystone_rear_width, keystone_rear_height], center=true);
+      linear_extrude(keystone_outside_depth + 1)
+        square([keystone_outside_width, keystone_outside_height], center=true);
   
-  // Top retention tab relief (above rear cavity)
-  translate([0, front_panel_thk + keystone_depth_total, keystone_rear_height/2 + keystone_relief_height])
+  // Top clip bar slot - allows the snap tab to engage
+  // Extends above the main cavity
+  translate([0, front_panel_thk + keystone_outside_depth, keystone_outside_height/2 + keystone_clip_height/2])
     rotate([90, 0, 0])
-      linear_extrude(keystone_depth_total)
-        square([keystone_rear_width, keystone_relief_height * 2], center=true);
+      linear_extrude(keystone_outside_depth + 1)
+        square([keystone_outside_width, keystone_clip_height * 2], center=true);
   
-  // Bottom retention tab relief (below rear cavity)
-  translate([0, front_panel_thk + keystone_depth_total, -keystone_rear_height/2 - keystone_relief_height])
+  // Bottom clip bar slot - allows the snap tab to engage  
+  // Extends below the main cavity
+  translate([0, front_panel_thk + keystone_outside_depth, -keystone_outside_height/2 - keystone_clip_height/2])
     rotate([90, 0, 0])
-      linear_extrude(keystone_depth_total)
-        square([keystone_rear_width, keystone_relief_height * 2], center=true);
+      linear_extrude(keystone_outside_depth + 1)
+        square([keystone_outside_width, keystone_clip_height * 2], center=true);
 }
 
 // Join bolt holes module - creates holes for M4 bolts along the join
@@ -514,15 +516,20 @@ module rack_half_full(side) {
           ? sled_offset + i * slot_pitch
           : -sled_offset - (i + 1) * slot_pitch;
         
-        // Keystone column position: between join and PC
+        // Center keystone in the column: PC slot is at one end, rib at the other
+        // The visible column width is keystone_column_width (22mm)
+        // Keystone receiver is keystone_outside_width (18mm), so 2mm margin each side
+        // Right side: keystone column is from slot_base to slot_base + keystone_column_width
+        // Left side: keystone column is from slot_base + pc_width to slot_base + pc_width + keystone_column_width
         keystone_center_x = side > 0 
-          ? slot_base + keystone_column_width/2  // left of PC
-          : slot_base + pc_width + keystone_column_width/2;  // right of PC
+          ? slot_base + keystone_column_width / 2 - 2  // shift left by 2mm (toward rib)
+          : slot_base + pc_width + keystone_column_width / 2 + 2;  // shift right by 2mm (toward rib)
         
         keystone_z_center = sled_z_start + pc_height/2;
         
         // 3 keystones stacked vertically, centered on slot height
-        keystone_v_spacing = keystone_front_height + 4;
+        // Use keystone_spacing (28mm) for proper separation between receivers
+        keystone_v_spacing = keystone_spacing;
         keystone_start_z = keystone_z_center - (keystones_per_slot - 1) * keystone_v_spacing / 2;
         
         for (j = [0:keystones_per_slot-1]) {
