@@ -3,6 +3,9 @@
 // Mini PC sled cutouts for vertical mounting
 // Two halves join with M3 screws via bottom joiner plate
 
+// Import RJ45 keystone receiver library
+use <rj45_keystone_receiver.scad>;
+
 $fn = 64;
 
 // --------------------
@@ -90,20 +93,14 @@ sled_wall = 3;     // wall between sled slots
 screw_hole_dia = 3.5;  // M3 screw holes
 screw_boss_dia = 8;    // boss around screw holes
 
-// Keystone jack dimensions (based on marcuswu/RJ45KeystoneReceiver)
-// Standard keystone: 18mm wide x 25.9mm high receiver, snaps in from rear
-keystone_outside_width = 18;        // Receiver outside width
-keystone_outside_height = 25.9;     // Receiver outside height (25 + 0.9 clip adjustment)
-keystone_outside_depth = 9.9;       // Receiver depth
-keystone_wall = 1.55;               // Wall thickness
-keystone_inside_width = 14.9;       // Inside width (outside - 2*wall)
-keystone_inside_height = 19.44;     // Inside height for jack body
-keystone_exterior_slot = 7.9;       // Depth of exterior slot
-keystone_clip_height = 1.35;        // Height of clip bars
-keystone_clip_radius = 1.35;        // Radius of clip bar rounded edge
+// Keystone jack dimensions (from marcuswu/RJ45KeystoneReceiver library)
+// Using library functions for dimensions
+keystone_outside_width = rj45_width();   // Receiver outside width (18mm)
+keystone_outside_height = rj45_height(); // Receiver outside height (25.9mm)
+keystone_outside_depth = rj45_depth();   // Receiver depth (9.9mm)
 keystone_front_width = 14.9;        // Front opening width (visible face)
-keystone_front_height = 16.0;       // Front opening height (visible face)
-keystone_spacing = 28;              // Center-to-center spacing between keystones (was 18, too tight)
+keystone_front_height = 20.34;      // Front opening height = outside_height - 5.56 (inside_height)
+keystone_spacing = 28;              // Center-to-center spacing between keystones
 keystones_per_slot = 3;             // Number of keystones per sled slot
 
 // Diagonal brace dimensions
@@ -188,37 +185,29 @@ module vent_grid(w, h){
         square(vent_hole_size, center=true);
 }
 
-// Keystone jack slot (based on marcuswu/RJ45KeystoneReceiver)
-// Creates a cutout that accepts standard keystone jacks from the rear
-// Oriented vertically: width in X, height in Z, depth in Y
+// Keystone jack cutout - just the front opening for the RJ45 port
 // Origin at front face center of keystone
+// Use OUTSIDE dimensions since receiver is added after cutout
 module keystone_jack_slot() {
-  // Front opening (visible face) - where RJ45 connector shows
-  translate([0, front_panel_thk + 1, 0])
+  // Cut hole sized to receiver outside dimensions so walls don't fill in cutout
+  // Extend through front panel AND ribs behind it (front_panel_thk + rib_height + margin)
+  translate([0, front_panel_thk + rib_height + 1, 0])
     rotate([90, 0, 0])
-      linear_extrude(front_panel_thk + 2)
-        square([keystone_front_width, keystone_front_height], center=true);
-  
-  // Main receiver cavity - where keystone body sits
-  // This is the full outside dimensions of the receiver
-  translate([0, front_panel_thk + keystone_outside_depth, 0])
-    rotate([90, 0, 0])
-      linear_extrude(keystone_outside_depth + 1)
+      linear_extrude(front_panel_thk + rib_height + 2)
         square([keystone_outside_width, keystone_outside_height], center=true);
-  
-  // Top clip bar slot - allows the snap tab to engage
-  // Extends above the main cavity
-  translate([0, front_panel_thk + keystone_outside_depth, keystone_outside_height/2 + keystone_clip_height/2])
+}
+
+// Keystone receiver using library - oriented for insertion from back (inside rack)
+// Origin at front face center of keystone
+module keystone_receiver() {
+  // Library's rj45Receiver: X=width(18), Y=height(25.9), Z=depth(0-9.9), clips at Z=-1.35 to 0
+  // We want: visible face at Y=0 (front panel), body extending back (+Y), clips at back
+  // rotate([90,0,0]): Z->-Y, Y->Z
+  // After rotation: body at Y=-9.9 to 0, clips at Y=0 to 1.35
+  // Translate Y by depth to push body behind front panel: body at Y=0 to 9.9, clips at Y=9.9 to 11.25
+  translate([-keystone_outside_width/2, keystone_outside_depth, -keystone_outside_height/2])
     rotate([90, 0, 0])
-      linear_extrude(keystone_outside_depth + 1)
-        square([keystone_outside_width, keystone_clip_height * 2], center=true);
-  
-  // Bottom clip bar slot - allows the snap tab to engage  
-  // Extends below the main cavity
-  translate([0, front_panel_thk + keystone_outside_depth, -keystone_outside_height/2 - keystone_clip_height/2])
-    rotate([90, 0, 0])
-      linear_extrude(keystone_outside_depth + 1)
-        square([keystone_outside_width, keystone_clip_height * 2], center=true);
+      rj45Receiver();
 }
 
 // Join bolt holes module - creates holes for M4 bolts along the join
@@ -522,8 +511,8 @@ module rack_half_full(side) {
         // Right side: keystone column is from slot_base to slot_base + keystone_column_width
         // Left side: keystone column is from slot_base + pc_width to slot_base + pc_width + keystone_column_width
         keystone_center_x = side > 0 
-          ? slot_base + keystone_column_width / 2 - 2  // shift left by 2mm (toward rib)
-          : slot_base + pc_width + keystone_column_width / 2 + 2;  // shift right by 2mm (toward rib)
+          ? slot_base + keystone_column_width / 2  // centered in column
+          : slot_base + pc_width + keystone_column_width / 2;  // centered in column
         
         keystone_z_center = sled_z_start + pc_height/2;
         
@@ -619,6 +608,30 @@ module rack_half_full(side) {
             translate([0, y_top, z_top])
               cube([brace_width, brace_vert_width, brace_thk]);
           }
+      }
+    }
+    
+    // Keystone receivers (positive geometry) - add actual receiver shapes
+    // Skip if test_front_only (no receivers on front-only test)
+    if (!test_front_only) {
+      for (i = [0:num_pcs_per_half-1]) {
+        slot_base = side > 0 
+          ? sled_offset + i * slot_pitch
+          : -sled_offset - (i + 1) * slot_pitch;
+        
+        keystone_center_x = side > 0 
+          ? slot_base + keystone_column_width / 2  // centered in column
+          : slot_base + pc_width + keystone_column_width / 2;  // centered in column
+        
+        keystone_z_center = sled_z_start + pc_height/2;
+        keystone_v_spacing = keystone_spacing;
+        keystone_start_z = keystone_z_center - (keystones_per_slot - 1) * keystone_v_spacing / 2;
+        
+        for (j = [0:keystones_per_slot-1]) {
+          keystone_z = keystone_start_z + j * keystone_v_spacing;
+          translate([keystone_center_x, 0, keystone_z])
+            keystone_receiver();
+        }
       }
     }
   }
