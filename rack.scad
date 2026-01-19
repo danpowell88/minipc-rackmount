@@ -348,12 +348,12 @@ module rack_half_full(side) {
           translate([half_width, 0, 0])
             cube([rack_width/2 - half_width, ear_thk, rack_height]);
           
-          // Fill gap at top - solid block connecting ear to faceplate
+          // Fill gap at top - solid block connecting ear to faceplate (flush with ear)
           translate([half_width - ear_width, 0, rack_height - panel_thk])
-            cube([ear_width, front_panel_thk, panel_thk]);
-          // Fill gap at bottom - solid block connecting ear to faceplate
+            cube([ear_width, ear_thk, panel_thk]);
+          // Fill gap at bottom - solid block connecting ear to faceplate (flush with ear)
           translate([half_width - ear_width, 0, 0])
-            cube([ear_width, front_panel_thk, panel_thk]);
+            cube([ear_width, ear_thk, panel_thk]);
           
           // Deep reinforcement ribs connecting middle solid ear section to rib structure
           // These extend back (in Y) from the ear through the front panel to the ribs behind
@@ -363,11 +363,14 @@ module rack_half_full(side) {
           middle_z_end = hole_z[middle_holes_end] + hole_size/2 + 3;
           middle_section_height = middle_z_end - middle_z_start;
           
-          // Solid block extending from outer ear edge through front panel and into rib area
+          // Solid block extending from ear (ear_thk) back through front panel and into rib area
           // This creates a thick structural connection from mounting area to main body
-          // Full width from rack edge to front panel, full depth to rib area
+          // Ear portion is ear_thk, then extends to rib area behind faceplate
           translate([half_width - ear_width, 0, middle_z_start])
-            cube([rack_width/2 - half_width + ear_width, front_panel_thk + rib_height, middle_section_height]);
+            cube([rack_width/2 - half_width + ear_width, ear_thk, middle_section_height]);
+          // Extension behind faceplate connecting to ribs (starts at faceplate, not ear)
+          translate([half_width - ear_width, ear_thk, middle_z_start])
+            cube([ear_width, front_panel_thk - ear_thk + rib_height, middle_section_height]);
           
           // Additional vertical rib extending from middle section down to bottom (ear_width wide)
           translate([half_width - ear_width, front_panel_thk, 0])
@@ -380,22 +383,25 @@ module rack_half_full(side) {
           translate([-rack_width/2, 0, 0])
             cube([rack_width/2 - half_width, ear_thk, rack_height]);
           
-          // Fill gap at top - solid block connecting ear to faceplate
+          // Fill gap at top - solid block connecting ear to faceplate (flush with ear)
           translate([-half_width, 0, rack_height - panel_thk])
-            cube([ear_width, front_panel_thk, panel_thk]);
-          // Fill gap at bottom - solid block connecting ear to faceplate
+            cube([ear_width, ear_thk, panel_thk]);
+          // Fill gap at bottom - solid block connecting ear to faceplate (flush with ear)
           translate([-half_width, 0, 0])
-            cube([ear_width, front_panel_thk, panel_thk]);
+            cube([ear_width, ear_thk, panel_thk]);
           
           // Deep reinforcement ribs connecting middle solid ear section to rib structure
           middle_z_start = hole_z[middle_holes_start] - hole_size/2 - 3;
           middle_z_end = hole_z[middle_holes_end] + hole_size/2 + 3;
           middle_section_height = middle_z_end - middle_z_start;
           
-          // Solid block extending from outer ear edge through front panel and into rib area
-          // Full width from rack edge to front panel, full depth to rib area
+          // Solid block on ear (ear_thk deep, flush with ear face)
+          // Full width from rack edge to front panel
           translate([-rack_width/2, 0, middle_z_start])
-            cube([rack_width/2 - half_width + ear_width, front_panel_thk + rib_height, middle_section_height]);
+            cube([rack_width/2 - half_width + ear_width, ear_thk, middle_section_height]);
+          // Extension behind faceplate connecting to ribs (starts at faceplate, not ear)
+          translate([-half_width, ear_thk, middle_z_start])
+            cube([ear_width, front_panel_thk - ear_thk + rib_height, middle_section_height]);
           
           // Additional vertical rib extending from middle section down to bottom (ear_width wide)
           translate([-half_width, front_panel_thk, 0])
