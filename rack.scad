@@ -55,7 +55,7 @@ panel_thk  = 3;
 front_panel_thk = 8;  // thicker front panel for strength
 
 // Front panel reinforcement ribs
-rib_width = 5;
+rib_width = 8;
 rib_height = 15;  // how far ribs extend back from front panel
 
 // Rack holes (M6 cage nut square holes)
@@ -185,6 +185,20 @@ module vent_grid(w, h){
         square(vent_hole_size, center=true);
 }
 
+// Vent grid for front panel - skip bottom rows for diagonal brace attachment
+module vent_grid_front(w, h){
+  cols = floor((w - 2*vent_margin) / vent_spacing);
+  rows = floor((h - 2*vent_margin) / vent_spacing);
+  start_x = (w - (cols-1)*vent_spacing) / 2;
+  start_y = (h - (rows-1)*vent_spacing) / 2;
+  
+  // Skip first 2 rows (rows 0, 1) to leave more solid material for diagonal brace attachment
+  for (row = [2:rows-1])
+    for (col = [0:cols-1])
+      translate([start_x + col*vent_spacing, start_y + row*vent_spacing])
+        square(vent_hole_size, center=true);
+}
+
 // Keystone jack cutout - just the front opening for the RJ45 port
 // Origin at front face center of keystone
 // Use OUTSIDE dimensions since receiver is added after cutout
@@ -293,8 +307,9 @@ module rack_half_full(side) {
       union(){
         // Bottom panel (half) - skip if test_no_bottom or test_front_only
         if (!test_no_bottom && !test_front_only) {
-          translate([side > 0 ? 0 : -half_width, 0, 0])
-            cube([half_width, depth, panel_thk]);
+          // Main bottom panel extending to the ear
+          translate([side > 0 ? 0 : -rack_width/2, 0, 0])
+            cube([rack_width/2, depth, panel_thk]);
         }
 
         // Front panel (half, thicker for strength) - skip if test_no_face
@@ -344,16 +359,18 @@ module rack_half_full(side) {
         // Front ear - skip if test_front_only
         if (!test_front_only) {
         if (side > 0) {
-          // Main ear - extended inward to meet faceplate
+          // Main ear - full depth to accommodate cage nut holes
+          // Ear must be deep enough so cage nut holes have material on all 4 sides
           translate([half_width, 0, 0])
-            cube([rack_width/2 - half_width, ear_thk, rack_height]);
+            cube([rack_width/2 - half_width, ear_thk + front_panel_thk + 3, rack_height]);
           
           // Fill gap at top - solid block connecting ear to faceplate (flush with ear)
           translate([half_width - ear_width, 0, rack_height - panel_thk])
             cube([ear_width, ear_thk, panel_thk]);
-          // Fill gap at bottom - solid block connecting ear to faceplate (flush with ear)
+          // Fill gap at bottom - solid block connecting ear to faceplate
+          // Extends full depth of cage nut hole to close the bottom
           translate([half_width - ear_width, 0, 0])
-            cube([ear_width, ear_thk, panel_thk]);
+            cube([ear_width, ear_thk + front_panel_thk + 3, panel_thk]);
           
           // Deep reinforcement ribs connecting middle solid ear section to rib structure
           // These extend back (in Y) from the ear through the front panel to the ribs behind
@@ -379,16 +396,18 @@ module rack_half_full(side) {
           translate([half_width - ear_width, front_panel_thk, middle_z_end])
             cube([ear_width, rib_height, rack_height - middle_z_end]);
         } else {
-          // Main ear - extended inward to meet faceplate
+          // Main ear - full depth to accommodate cage nut holes
+          // Ear must be deep enough so cage nut holes have material on all 4 sides
           translate([-rack_width/2, 0, 0])
-            cube([rack_width/2 - half_width, ear_thk, rack_height]);
+            cube([rack_width/2 - half_width, ear_thk + front_panel_thk + 3, rack_height]);
           
           // Fill gap at top - solid block connecting ear to faceplate (flush with ear)
           translate([-half_width, 0, rack_height - panel_thk])
             cube([ear_width, ear_thk, panel_thk]);
-          // Fill gap at bottom - solid block connecting ear to faceplate (flush with ear)
+          // Fill gap at bottom - solid block connecting ear to faceplate
+          // Extends full depth of cage nut hole to close the bottom
           translate([-half_width, 0, 0])
-            cube([ear_width, ear_thk, panel_thk]);
+            cube([ear_width, ear_thk + front_panel_thk + 3, panel_thk]);
           
           // Deep reinforcement ribs connecting middle solid ear section to rib structure
           middle_z_start = hole_z[middle_holes_start] - hole_size/2 - 3;
@@ -423,17 +442,32 @@ module rack_half_full(side) {
 
       // Square rack holes (only on this side's ear)
       // Skip middle holes (indices 3-5) to keep solid for structural support
+      // Holes extend from front face through and past rear of ear so cage nuts can slide in
+      // Full size holes - the ear is deep enough to have material on all sides
       for (i = [0:len(hole_z)-1]) {
         if (i < middle_holes_start || i > middle_holes_end) {
           z = hole_z[i];
           if (side > 0) {
-            translate([rack_width/2 - hole_edge_offset, ear_thk/2, z])
-              cube([hole_size, ear_thk+1, hole_size], center=true);
+            // Cage nut hole: centered at hole_edge_offset from outer edge
+            // Y: from front face through ear and behind for cage nut access
+            translate([rack_width/2 - hole_edge_offset - hole_size/2, -1, z - hole_size/2])
+              cube([hole_size, ear_thk + front_panel_thk + 2, hole_size]);
           } else {
-            translate([-rack_width/2 + hole_edge_offset, ear_thk/2, z])
-              cube([hole_size, ear_thk+1, hole_size], center=true);
+            translate([-rack_width/2 + hole_edge_offset - hole_size/2, -1, z - hole_size/2])
+              cube([hole_size, ear_thk + front_panel_thk + 2, hole_size]);
           }
         }
+      }
+      
+      // Cut out bottom panel where it would overlap the rack ear mounting path
+      // Only cut BEHIND the ear (Y > ear depth) so cage nut holes stay closed
+      // Ear is ear_thk + front_panel_thk + 3 deep, cutout starts after that
+      if (side > 0) {
+        translate([half_width, ear_thk + front_panel_thk + 3, -1])
+          cube([rack_width/2 - half_width, depth, panel_thk + 2]);
+      } else {
+        translate([-rack_width/2, ear_thk + front_panel_thk + 3, -1])
+          cube([rack_width/2 - half_width, depth, panel_thk + 2]);
       }
 
       // Vent holes in bottom panel (half) - avoid joiner area and diagonal brace
@@ -462,12 +496,12 @@ module rack_half_full(side) {
           translate([0, front_panel_thk+1, 0])
             rotate([90, 0, 0])
               linear_extrude(front_panel_thk+2)
-                vent_grid(half_width/2, sled_z_start);
+                vent_grid_front(half_width/2, sled_z_start);
         } else {
           translate([-half_width/2, front_panel_thk+1, 0])
             rotate([90, 0, 0])
               linear_extrude(front_panel_thk+2)
-                vent_grid(half_width/2, sled_z_start);
+                vent_grid_front(half_width/2, sled_z_start);
         }
       }
       // Above sled slots
@@ -477,12 +511,12 @@ module rack_half_full(side) {
           translate([0, front_panel_thk+1, sled_z_start + pc_height])
             rotate([90, 0, 0])
               linear_extrude(front_panel_thk+2)
-                vent_grid(half_width/2, top_space);
+                vent_grid_front(half_width/2, top_space);
         } else {
           translate([-half_width/2, front_panel_thk+1, sled_z_start + pc_height])
             rotate([90, 0, 0])
               linear_extrude(front_panel_thk+2)
-                vent_grid(half_width/2, top_space);
+                vent_grid_front(half_width/2, top_space);
         }
       }
 
@@ -572,18 +606,32 @@ module rack_half_full(side) {
     // Diagonal brace with diagonal supports (print-friendly when front face down)
     // Skip if test_no_bracing or test_front_only
     if (!test_no_bracing && !test_front_only) {
-      // Position at outer edge of panel, past all slots
-      brace_x = side > 0 ? half_width - brace_width : -half_width;
+      // Position brace in the L-shaped area between slots and ear
+      // Constant width throughout to avoid interfering with ears
+      // Right side: needs offset to clear last slot
+      // Left side: positioned at -half_width
+      brace_actual_width = 10;  // constant width throughout
       
-      // Main diagonal brace
+      // Calculate last slot position
+      last_slot_outer_edge = side > 0 
+        ? sled_offset + num_pcs_per_half * slot_pitch
+        : -sled_offset - num_pcs_per_half * slot_pitch;
+      
+      // Right side: position after last slot with small gap
+      // Left side: position at -half_width (already clear of slots)
+      brace_x = side > 0 
+        ? last_slot_outer_edge + 2  // 2mm gap after last slot
+        : -half_width;
+      
+      // Main diagonal brace - constant width, no taper
       translate([brace_x, 0, 0])
         hull() {
           // Top front - joins to back of top of front panel
           translate([0, front_panel_thk + rib_height, rack_height - brace_thk])
-            cube([brace_width, brace_thk, brace_thk]);
+            cube([brace_actual_width, brace_thk, brace_thk]);
           // Bottom back
           translate([0, depth - brace_thk, 0])
-            cube([brace_width, brace_thk, brace_thk]);
+            cube([brace_actual_width, brace_thk, brace_thk]);
         }
       
       // Diagonal supports along the main brace - same angle as main brace
@@ -604,15 +652,15 @@ module rack_half_full(side) {
         y_bottom_calc = y_top - z_top / brace_angle_ratio;
         y_bottom = max(y_bottom_calc, front_panel_thk + rib_height);
         
-        // Diagonal support from bottom panel to brace (same angle as main brace)
+        // Diagonal support from bottom panel to brace (constant width)
         translate([brace_x, 0, 0])
           hull() {
             // Bottom point
             translate([0, y_bottom, 0])
-              cube([brace_width, brace_vert_width, brace_thk]);
-            // Top point (at the main brace)
+              cube([brace_actual_width, brace_vert_width, brace_thk]);
+            // Top point
             translate([0, y_top, z_top])
-              cube([brace_width, brace_vert_width, brace_thk]);
+              cube([brace_actual_width, brace_vert_width, brace_thk]);
           }
       }
     }
