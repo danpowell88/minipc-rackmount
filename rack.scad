@@ -138,14 +138,14 @@ crossbar_height = brace_thk;
 crossbar_depth = 20;
 
 // Join bolt holes - simple M4 bolt holes to connect the two halves
-join_bolt_dia = 4.5;             // M4 bolt clearance hole
+join_bolt_dia = 4.5;             // M4 bolt clearance hole (M4 = 4mm, +0.5mm clearance)
 join_bolt_count = 5;             // number of bolts along the join (evenly spaced vertically)
 join_edge_width = 15;            // width of thickened edge at join (how far it extends in X)
 join_edge_depth = rib_height;    // depth matches rib_height for flush inside face
-join_bolt_head_dia = 8;          // M4 bolt head diameter (hex socket cap)
-join_bolt_head_depth = 4;        // depth of recess for bolt head
-join_nut_dia = 9;                // M4 nut diameter (across flats ~7mm, across corners ~8mm, +tolerance)
-join_nut_depth = 4;              // depth of recess for nut
+join_bolt_head_dia = 8.5;        // M4 socket cap head: 7mm across flats = 8.08mm corners + 0.4mm tolerance
+join_bolt_head_depth = 4.5;      // M4 socket cap head height = 4mm + 0.5mm clearance
+join_nut_dia = 8.5;              // M4 nut: 7mm across flats = 8.08mm corners + 0.4mm tolerance
+join_nut_depth = 3.5;            // M4 nut thickness = 3.2mm + 0.3mm clearance
 
 // Calculate centered sled positions
 // Center the sleds within each half, leaving gap at center for joiner
@@ -225,38 +225,51 @@ module keystone_receiver() {
 }
 
 // Join bolt holes module - creates holes for M4 bolts along the join
-// Holes go horizontally (X direction) through the thickened join edge
-// Includes recesses for bolt head on one side and nut on the other
+// Bolt goes through BOTH halves when assembled
+// Bolt head recess on inside of right half (away from join)
+// Nut recess on inside of left half (away from join)
+// Join interface just has clearance hole
 module join_bolt_holes(side) {
   // Bolt holes are evenly spaced vertically
   bolt_spacing = (rack_height - 20) / (join_bolt_count - 1);
   // Position bolts toward the back of the join edge (centered in join_edge_depth)
   bolt_y = front_panel_thk + join_edge_depth / 2;
   
+  // Use much longer lengths to ensure holes cut through all geometry
+  cut_length = 100;
+  
   for (i = [0 : join_bolt_count - 1]) {
     bolt_z = 10 + i * bolt_spacing;
-    // Main bolt hole - horizontal in X direction
-    translate([0, bolt_y, bolt_z])
-      rotate([0, 90, 0])
-        cylinder(h=join_edge_width * 2 + 2, d=join_bolt_dia, center=true, $fn=20);
     
-    // Recess on outer side for bolt head or nut
-    // Right half (side > 0): recess on +X side (bolt head), cuts inward from outer face
-    // Left half (side < 0): recess on -X side (nut), cuts inward from outer face
-    recess_depth = side > 0 ? join_bolt_head_depth : join_nut_depth;
-    recess_dia = side > 0 ? join_bolt_head_dia : join_nut_dia;
-    
-    // Position at outer edge, cylinder extends inward
-    // Right half: outer face at +join_edge_width, recess goes toward -X
-    // Left half: outer face at -join_edge_width, recess goes toward +X
     if (side > 0) {
-      translate([join_edge_width + 1, bolt_y, bolt_z])
-        rotate([0, -90, 0])
-          cylinder(h=recess_depth + 1, d=recess_dia, $fn=6);
-    } else {
-      translate([-join_edge_width - 1, bolt_y, bolt_z])
+      // Right half: geometry is X=0 to X=join_edge_width
+      // Inside face is at X=join_edge_width, join face is at X=0
+      
+      // Bolt clearance hole - goes all the way through
+      translate([-cut_length/2, bolt_y, bolt_z])
         rotate([0, 90, 0])
-          cylinder(h=recess_depth + 1, d=recess_dia, $fn=6);
+          cylinder(h=cut_length, d=join_bolt_dia, $fn=20);
+      
+      // Bolt HEAD hex recess on INSIDE face - extend far out to cut through all material
+      // Then goes inward by bolt_head_depth
+      translate([cut_length/2, bolt_y, bolt_z])
+        rotate([0, -90, 0])
+          cylinder(h=cut_length/2 - join_edge_width + join_bolt_head_depth, d=join_bolt_head_dia, $fn=6);
+          
+    } else {
+      // Left half: geometry is X=-join_edge_width to X=0
+      // Inside face is at X=-join_edge_width, join face is at X=0
+      
+      // Bolt clearance hole - goes all the way through
+      translate([-cut_length/2, bolt_y, bolt_z])
+        rotate([0, 90, 0])
+          cylinder(h=cut_length, d=join_bolt_dia, $fn=20);
+      
+      // NUT hex recess on INSIDE face - extend far out to cut through all material
+      // Then goes inward by nut_depth
+      translate([-cut_length/2, bolt_y, bolt_z])
+        rotate([0, 90, 0])
+          cylinder(h=cut_length/2 - join_edge_width + join_nut_depth, d=join_nut_dia, $fn=6);
     }
   }
 }
