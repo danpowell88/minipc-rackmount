@@ -372,18 +372,17 @@ module rack_half_full(side) {
         // Front ear - skip if test_front_only
         if (!test_front_only) {
         if (side > 0) {
-          // Main ear - full depth to accommodate cage nut holes
-          // Ear must be deep enough so cage nut holes have material on all 4 sides
+          // Main ear - standard thickness for rack mounting
+          // Cage nut holes pass through ear and front panel
           translate([half_width, 0, 0])
-            cube([rack_width/2 - half_width, ear_thk + front_panel_thk + 3, rack_height]);
+            cube([rack_width/2 - half_width, ear_thk, rack_height]);
           
           // Fill gap at top - solid block connecting ear to faceplate (flush with ear)
           translate([half_width - ear_width, 0, rack_height - panel_thk])
             cube([ear_width, ear_thk, panel_thk]);
           // Fill gap at bottom - solid block connecting ear to faceplate
-          // Extends full depth of cage nut hole to close the bottom
           translate([half_width - ear_width, 0, 0])
-            cube([ear_width, ear_thk + front_panel_thk + 3, panel_thk]);
+            cube([ear_width, ear_thk, panel_thk]);
           
           // Deep reinforcement ribs connecting middle solid ear section to rib structure
           // These extend back (in Y) from the ear through the front panel to the ribs behind
@@ -409,18 +408,17 @@ module rack_half_full(side) {
           translate([half_width - ear_width, front_panel_thk, middle_z_end])
             cube([ear_width, rib_height, rack_height - middle_z_end]);
         } else {
-          // Main ear - full depth to accommodate cage nut holes
-          // Ear must be deep enough so cage nut holes have material on all 4 sides
+          // Main ear - standard thickness for rack mounting
+          // Cage nut holes pass through ear and front panel
           translate([-rack_width/2, 0, 0])
-            cube([rack_width/2 - half_width, ear_thk + front_panel_thk + 3, rack_height]);
+            cube([rack_width/2 - half_width, ear_thk, rack_height]);
           
           // Fill gap at top - solid block connecting ear to faceplate (flush with ear)
           translate([-half_width, 0, rack_height - panel_thk])
             cube([ear_width, ear_thk, panel_thk]);
           // Fill gap at bottom - solid block connecting ear to faceplate
-          // Extends full depth of cage nut hole to close the bottom
           translate([-half_width, 0, 0])
-            cube([ear_width, ear_thk + front_panel_thk + 3, panel_thk]);
+            cube([ear_width, ear_thk, panel_thk]);
           
           // Deep reinforcement ribs connecting middle solid ear section to rib structure
           middle_z_start = hole_z[middle_holes_start] - hole_size/2 - 3;
@@ -462,7 +460,7 @@ module rack_half_full(side) {
           z = hole_z[i];
           if (side > 0) {
             // Cage nut hole: centered at hole_edge_offset from outer edge
-            // Y: from front face through ear and behind for cage nut access
+            // Y: from front face through ear and front panel for cage nut access
             translate([rack_width/2 - hole_edge_offset - hole_size/2, -1, z - hole_size/2])
               cube([hole_size, ear_thk + front_panel_thk + 2, hole_size]);
           } else {
@@ -473,13 +471,12 @@ module rack_half_full(side) {
       }
       
       // Cut out bottom panel where it would overlap the rack ear mounting path
-      // Only cut BEHIND the ear (Y > ear depth) so cage nut holes stay closed
-      // Ear is ear_thk + front_panel_thk + 3 deep, cutout starts after that
+      // Cutout starts behind the ear
       if (side > 0) {
-        translate([half_width, ear_thk + front_panel_thk + 3, -1])
+        translate([half_width, ear_thk, -1])
           cube([rack_width/2 - half_width, depth, panel_thk + 2]);
       } else {
-        translate([-rack_width/2, ear_thk + front_panel_thk + 3, -1])
+        translate([-rack_width/2, ear_thk, -1])
           cube([rack_width/2 - half_width, depth, panel_thk + 2]);
       }
 
