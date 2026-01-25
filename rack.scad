@@ -51,7 +51,7 @@ depth       = 245;       // reduced to fit 250mm print bed
 ear_width   = 15.875;    // standard rack ear width (0.625")
 ear_thk     = 5;
 
-panel_thk  = 3;
+panel_thk  = 5;          // bottom panel thickness (increased for strength)
 front_panel_thk = 8;  // thicker front panel for strength
 
 // Front panel reinforcement ribs
