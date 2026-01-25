@@ -498,23 +498,24 @@ module rack_half_full(side) {
           cube([rack_width/2 - half_width, depth, panel_thk + 2]);
       }
 
-      // Vent holes in bottom panel (half) - avoid joiner area and diagonal brace
-      // Right side: from near center to near brace
-      // Left side: from near brace to near center
+      // Vent holes in bottom panel (half) - avoid joiner area and corner gusset
+      // Right side: from near center to near gusset
+      // Left side: from near gusset to near center
       // Extended one row (vent_spacing) closer to center and one row toward outer edge
-      // First column on outer edge is kept solid to avoid overlapping diagonal brace
+      // Corner gusset is small (10mm wide, 40mm deep) so less area to avoid
+      gusset_width = 10;  // must match gusset definition
       if (side > 0) {
         // Right half: vent from near center toward outer edge
-        // Skip last corner (outer edge near brace)
+        // Skip last corner (outer edge near gusset)
         vent_x_start = joiner_width/2 - vent_spacing;
-        vent_x_end = half_width - panel_thk - brace_width + vent_spacing;
+        vent_x_end = half_width - panel_thk - gusset_width + vent_spacing;
         translate([vent_x_start, 0, -1])
           linear_extrude(panel_thk+2)
             vent_grid_bottom(vent_x_end - vent_x_start, depth, skip_first_corner=false, skip_last_corner=true);
       } else {
         // Left half: vent from near outer edge to near center
-        // Skip first corner (outer edge near brace)
-        vent_x_start = -half_width + panel_thk + brace_width - vent_spacing;
+        // Skip first corner (outer edge near gusset)
+        vent_x_start = -half_width + panel_thk + gusset_width - vent_spacing;
         vent_x_end = -joiner_width/2 + vent_spacing;
         translate([vent_x_start, 0, -1])
           linear_extrude(panel_thk+2)
@@ -635,66 +636,26 @@ module rack_half_full(side) {
       }
     }
 
-    // Diagonal brace with diagonal supports (print-friendly when front face down)
+    // Corner triangle gusset (print-friendly when front face down)
+    // Simple solid triangle connecting bottom panel to front face
     // Skip if test_no_bracing or test_front_only
     if (!test_no_bracing && !test_front_only) {
-      // Position brace in the L-shaped area between slots and ear
-      // Constant width throughout to avoid interfering with ears
-      // Right side: needs offset to clear last slot
-      // Left side: positioned at -half_width
-      brace_actual_width = 10;  // constant width throughout
+      // Position gusset in the corner near the ear
+      gusset_width = 10;       // width of triangle (X direction)
+      gusset_depth = 80;       // how far back from front panel
+      gusset_height = 80;      // how tall up the front panel
       
-      // Calculate last slot position
-      last_slot_outer_edge = side > 0 
-        ? sled_offset + num_pcs_per_half * slot_pitch
-        : -sled_offset - num_pcs_per_half * slot_pitch;
+      // Right side: position near ear
+      // Left side: position at -half_width
+      gusset_x = side > 0 
+        ? half_width - panel_thk - gusset_width
+        : -half_width + panel_thk;
       
-      // Right side: position after last slot with small gap
-      // Left side: position at -half_width (already clear of slots)
-      brace_x = side > 0 
-        ? last_slot_outer_edge + 2  // 2mm gap after last slot
-        : -half_width;
-      
-      // Main diagonal brace - constant width, no taper
-      translate([brace_x, 0, 0])
-        hull() {
-          // Top front - joins to back of top of front panel
-          translate([0, front_panel_thk + rib_height, rack_height - brace_thk])
-            cube([brace_actual_width, brace_thk, brace_thk]);
-          // Bottom back
-          translate([0, depth - brace_thk, 0])
-            cube([brace_actual_width, brace_thk, brace_thk]);
-        }
-      
-      // Diagonal supports along the main brace - same angle as main brace
-      // These go from bottom panel diagonally up following the exact brace angle
-      brace_run = depth - front_panel_thk - rib_height - brace_thk;  // horizontal length of brace
-      brace_rise = rack_height - brace_thk;  // vertical rise of brace
-      brace_angle_ratio = brace_rise / brace_run;  // rise per unit run
-      
-      for (i = [1:brace_vert_supports]) {
-        // Calculate position along the brace where support meets it
-        t = i / (brace_vert_supports + 1);
-        y_top = front_panel_thk + rib_height + t * brace_run;
-        z_top = rack_height - brace_thk - t * brace_rise;
-        
-        // Calculate bottom position - same angle as main brace
-        // Support goes from (y_bottom, 0) to (y_top, z_top) at same angle
-        // Clamp to not go in front of front panel + ribs
-        y_bottom_calc = y_top - z_top / brace_angle_ratio;
-        y_bottom = max(y_bottom_calc, front_panel_thk + rib_height);
-        
-        // Diagonal support from bottom panel to brace (constant width)
-        translate([brace_x, 0, 0])
-          hull() {
-            // Bottom point
-            translate([0, y_bottom, 0])
-              cube([brace_actual_width, brace_vert_width, brace_thk]);
-            // Top point
-            translate([0, y_top, z_top])
-              cube([brace_actual_width, brace_vert_width, brace_thk]);
-          }
-      }
+      // Solid triangular gusset - connects bottom to front face
+      translate([gusset_x, front_panel_thk, 0])
+        rotate([90, 0, 90])
+          linear_extrude(gusset_width)
+            polygon([[0, 0], [gusset_depth, 0], [0, gusset_height]]);
     }
     
     // Keystone receivers (positive geometry) - add actual receiver shapes
