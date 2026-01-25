@@ -645,11 +645,11 @@ module rack_half_full(side) {
       gusset_depth = 80;       // how far back from front panel
       gusset_height = 80;      // how tall up the front panel
       
-      // Right side: position near ear
-      // Left side: position at -half_width
+      // Right side: position at outer edge near ear (inside face of side wall)
+      // Left side: position at outer edge near ear
       gusset_x = side > 0 
-        ? half_width - panel_thk - gusset_width
-        : -half_width + panel_thk;
+        ? half_width - gusset_width
+        : -half_width;
       
       // Solid triangular gusset - connects bottom to front face
       translate([gusset_x, front_panel_thk, 0])
