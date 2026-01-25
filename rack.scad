@@ -80,8 +80,8 @@ hole_z = [
 ];
 
 // Vent hole pattern (simple grid for strength and easy printing)
-vent_hole_size = 12;     // square hole size (larger = less material)
-vent_spacing = 14;       // center-to-center spacing (2mm walls between holes)
+vent_hole_size = 8;      // square hole size (smaller = more material/strength)
+vent_spacing = 14;       // center-to-center spacing (6mm walls between holes)
 vent_margin = 4;         // margin from edges (reduced to fit more holes)
 
 // Mini PC dimensions
