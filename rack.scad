@@ -185,6 +185,24 @@ module vent_grid(w, h){
         square(vent_hole_size, center=true);
 }
 
+// Vent grid for bottom panel - skip corner square (outer edge near brace)
+module vent_grid_bottom(w, h, skip_first_corner=false, skip_last_corner=false){
+  cols = floor((w - 2*vent_margin) / vent_spacing);
+  rows = floor((h - 2*vent_margin) / vent_spacing);
+  start_x = (w - (cols-1)*vent_spacing) / 2;
+  start_y = (h - (rows-1)*vent_spacing) / 2;
+  
+  // Skip only the corner square where brace attaches (first or last col, first row)
+  for (row = [0:rows-1])
+    for (col = [0:cols-1]) {
+      skip_this = (skip_first_corner && col == 0 && row == 0) ||
+                  (skip_last_corner && col == cols-1 && row == 0);
+      if (!skip_this)
+        translate([start_x + col*vent_spacing, start_y + row*vent_spacing])
+          square(vent_hole_size, center=true);
+    }
+}
+
 // Vent grid for front panel - skip bottom rows for diagonal brace attachment
 module vent_grid_front(w, h){
   cols = floor((w - 2*vent_margin) / vent_spacing);
@@ -481,22 +499,26 @@ module rack_half_full(side) {
       }
 
       // Vent holes in bottom panel (half) - avoid joiner area and diagonal brace
-      // Right side: from joiner_width/2 to brace start
-      // Left side: from brace end to -joiner_width/2
+      // Right side: from near center to near brace
+      // Left side: from near brace to near center
+      // Extended one row (vent_spacing) closer to center and one row toward outer edge
+      // First column on outer edge is kept solid to avoid overlapping diagonal brace
       if (side > 0) {
-        // Right half: vent from joiner edge to brace
-        vent_x_start = joiner_width/2;
-        vent_x_end = half_width - panel_thk - brace_width;
+        // Right half: vent from near center toward outer edge
+        // Skip last corner (outer edge near brace)
+        vent_x_start = joiner_width/2 - vent_spacing;
+        vent_x_end = half_width - panel_thk - brace_width + vent_spacing;
         translate([vent_x_start, 0, -1])
           linear_extrude(panel_thk+2)
-            vent_grid(vent_x_end - vent_x_start, depth);
+            vent_grid_bottom(vent_x_end - vent_x_start, depth, skip_first_corner=false, skip_last_corner=true);
       } else {
-        // Left half: vent from brace end to joiner edge
-        vent_x_start = -half_width + panel_thk + brace_width;
-        vent_x_end = -joiner_width/2;
+        // Left half: vent from near outer edge to near center
+        // Skip first corner (outer edge near brace)
+        vent_x_start = -half_width + panel_thk + brace_width - vent_spacing;
+        vent_x_end = -joiner_width/2 + vent_spacing;
         translate([vent_x_start, 0, -1])
           linear_extrude(panel_thk+2)
-            vent_grid(vent_x_end - vent_x_start, depth);
+            vent_grid_bottom(vent_x_end - vent_x_start, depth, skip_first_corner=true, skip_last_corner=false);
       }
 
       // Vent holes in front panel (below and above sled area)
