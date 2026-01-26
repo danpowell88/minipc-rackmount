@@ -128,7 +128,8 @@ join_screw_spacing = 15;  // vertical spacing between screws on flange
 
 // Bottom joiner plate dimensions
 joiner_length = 100;      // how far along depth the joiner extends
-joiner_width = 60;        // total width spanning both halves
+joiner_width = 60;        // total width spanning both halves (used for vent spacing)
+joiner_plate_width = 40;  // actual joiner plate width (smaller to not cover vents)
 joiner_thk = 4;           // thickness of joiner plate
 joiner_screw_inset = 10;  // distance from edge to screw holes
 
@@ -697,19 +698,19 @@ module bottom_joiner() {
   difference() {
     union() {
       // Main joiner plate running from behind front panel ribs to back
-      translate([-joiner_width/2, joiner_start, 0])
-        cube([joiner_width, joiner_depth, joiner_thk]);
+      translate([-joiner_plate_width/2, joiner_start, 0])
+        cube([joiner_plate_width, joiner_depth, joiner_thk]);
     }
     
     // Screw holes for left half - evenly distributed along full depth
     for (i = [0:num_joiner_screws-1]) {
-      translate([-joiner_width/4, joiner_start + joiner_screw_inset + i * screw_spacing, -1])
+      translate([-joiner_plate_width/4, joiner_start + joiner_screw_inset + i * screw_spacing, -1])
         cylinder(h=joiner_thk+3, d=screw_hole_dia);
     }
     
     // Screw holes for right half - evenly distributed along full depth
     for (i = [0:num_joiner_screws-1]) {
-      translate([joiner_width/4, joiner_start + joiner_screw_inset + i * screw_spacing, -1])
+      translate([joiner_plate_width/4, joiner_start + joiner_screw_inset + i * screw_spacing, -1])
         cylinder(h=joiner_thk+3, d=screw_hole_dia);
     }
   }
